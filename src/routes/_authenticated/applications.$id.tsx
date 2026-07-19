@@ -33,7 +33,7 @@ function ReviewPage() {
     const { data: p } = await supabase.from("programs").select("id,name,requirements").eq("id", a.program_id).single();
     setProg(p as Program);
     const { data: d } = await supabase.from("documents").select("*").eq("application_id", id).order("created_at");
-    setDocs((d ?? []) as Doc[]);
+    setDocs(((d ?? []) as unknown) as Doc[]);
     const newUrls: Record<string, string> = {};
     for (const doc of d ?? []) {
       if (doc.storage_path) {

@@ -31,7 +31,7 @@ function ProgramDetail() {
   const load = useCallback(async () => {
     const { data: p, error } = await supabase.from("programs").select("*").eq("id", id).single();
     if (error) return toast.error(error.message);
-    setProg(p as ProgramFull);
+    setProg((p as unknown) as ProgramFull);
     const { data: a } = await supabase.from("applications").select("id,status,applicant,last_activity_at,submitted_at").eq("program_id", id).order("last_activity_at", { ascending: false });
     setApps((a ?? []) as AppRow[]);
   }, [id]);
