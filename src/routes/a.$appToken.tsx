@@ -92,7 +92,7 @@ function RenterApp() {
         const { error } = await import("@/integrations/supabase/client").then(({ supabase }) =>
           supabase.storage.from("documents").upload(path, new Blob([new Uint8Array(bytes)], { type: "application/pdf" })),
         );
-        if (error) return toast.error(error.message);
+        if (error) { toast.error(error.message); return; }
         await submitApplication(appToken, path);
         // Also give the renter a local download
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "application/pdf" }));
