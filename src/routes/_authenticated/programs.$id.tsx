@@ -11,13 +11,14 @@ import { Copy, Trash2, Plus, Download } from "lucide-react";
 
 interface ProgramFull {
   id: string; name: string; program_type: string; link_token: string;
-  requirements: Requirement[]; owner_id: string;
+  requirements: Requirement[]; owner_id: string; retention_days: number | null;
 }
 interface AppRow {
   id: string; status: string; applicant: { name?: string }; last_activity_at: string; submitted_at: string | null;
 }
 
 export const Route = createFileRoute("/_authenticated/programs/$id")({
+  head: () => ({ meta: [{ title: "Program — DocKit" }, { name: "robots", content: "noindex" }] }),
   component: ProgramDetail,
 });
 
@@ -26,7 +27,7 @@ function ProgramDetail() {
   const [prog, setProg] = useState<ProgramFull | null>(null);
   const [apps, setApps] = useState<AppRow[]>([]);
   const [qr, setQr] = useState<string>("");
-  const [tab, setTab] = useState<"share" | "requirements" | "applications" | "team" | "analytics">("share");
+  const [tab, setTab] = useState<"share" | "requirements" | "applications" | "team" | "analytics" | "settings">("share");
 
   const load = useCallback(async () => {
     const { data: p, error } = await supabase.from("programs").select("*").eq("id", id).single();
@@ -36,6 +37,15 @@ function ProgramDetail() {
     setApps((a ?? []) as AppRow[]);
   }, [id]);
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: refresh applications when they change.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`program-${id}-apps`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "applications", filter: `program_id=eq.${id}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, load]);
 
   const shareUrl = useMemo(() => prog ? `${window.location.origin}/r/${prog.link_token}` : "", [prog]);
   useEffect(() => {
@@ -75,28 +85,31 @@ function ProgramDetail() {
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-border">
-        {(["share","requirements","applications","team","analytics"] as const).map((t) => (
+        {(["share","requirements","applications","team","analytics","settings"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm capitalize ${tab === t ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}`}>{t}</button>
         ))}
       </div>
 
       {tab === "share" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h2 className="font-semibold">Renter link</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Anyone with this link can start an application.</p>
-            <div className="mt-3 flex gap-2">
-              <Input readOnly value={shareUrl} />
-              <Button variant="outline" onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success("Copied."); }}>
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
+        <div className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6">
+          <div className="text-center">
+            <h2 className="text-lg font-semibold">Share this program with renters</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Anyone with the link can start an application. The link is unguessable.</p>
           </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h2 className="font-semibold">QR code</h2>
-            {qr && <img src={qr} alt="QR code for renter link" width={200} height={200} className="mt-3" />}
-            {qr && <a href={qr} download={`${prog.name}-qr.png`} className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"><Download className="h-4 w-4" />Download PNG</a>}
+          {qr && (
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <img src={qr} alt="QR code for renter link" width={240} height={240} className="rounded-md border border-border" />
+              <a href={qr} download={`${prog.name}-qr.png`} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                <Download className="h-4 w-4" />Download QR PNG
+              </a>
+            </div>
+          )}
+          <div className="mt-6 flex gap-2">
+            <Input readOnly value={shareUrl} aria-label="Renter share link" />
+            <Button variant="outline" onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success("Copied."); }}>
+              <Copy className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}
@@ -116,7 +129,9 @@ function ProgramDetail() {
                   <Link to="/applications/$id" params={{ id: a.id }} className="font-medium hover:underline">
                     {a.applicant?.name || "(no name yet)"}
                   </Link>
-                  <p className="text-xs text-muted-foreground">Status: {a.status} · last active {new Date(a.last_activity_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <StatusText s={a.status} /> · last active {new Date(a.last_activity_at).toLocaleString()}
+                  </p>
                 </div>
                 <Link to="/applications/$id" params={{ id: a.id }} className="text-sm text-primary">Review →</Link>
               </li>
@@ -128,8 +143,20 @@ function ProgramDetail() {
 
       {tab === "team" && <TeamTab programId={prog.id} />}
       {tab === "analytics" && <AnalyticsTab programId={prog.id} />}
+      {tab === "settings" && <SettingsTab prog={prog} onSaved={() => { load(); }} />}
     </div>
   );
+}
+
+function StatusText({ s }: { s: string }) {
+  const labels: Record<string, string> = {
+    in_progress: "In progress",
+    submitted: "Awaiting review",
+    approved: "Approved",
+    rejected: "Not approved",
+    withdrawn: "Withdrawn",
+  };
+  return <span>{labels[s] ?? s}</span>;
 }
 
 function Requirements({ value, onChange }: { value: Requirement[]; onChange: (v: Requirement[]) => void }) {
@@ -173,34 +200,33 @@ function Requirements({ value, onChange }: { value: Requirement[]; onChange: (v:
 }
 
 function TeamTab({ programId }: { programId: string }) {
-  const [members, setMembers] = useState<{ id: string; invited_email: string; role: string }[]>([]);
+  const [members, setMembers] = useState<{ id: string; invited_email: string; role: string; user_id: string | null }[]>([]);
   const [email, setEmail] = useState("");
   const load = useCallback(async () => {
-    const { data } = await supabase.from("team_members").select("id,invited_email,role").eq("program_id", programId);
+    const { data } = await supabase.from("team_members").select("id,invited_email,role,user_id").eq("program_id", programId);
     setMembers((data ?? []) as never);
   }, [programId]);
   useEffect(() => { load(); }, [load]);
 
   async function invite() {
     if (!email) return;
-    // Try to link user_id if that email already has an account (best-effort).
-    const { error } = await supabase.from("team_members").insert({ program_id: programId, invited_email: email, role: "member" });
+    const { error } = await supabase.from("team_members").insert({ program_id: programId, invited_email: email.toLowerCase(), role: "member" });
     if (error) return toast.error(error.message);
     setEmail(""); await load();
-    toast.success("Invitation added. Ask them to sign up with this email.");
+    toast.success("Invitation added. They'll get access when they sign up with this email.");
   }
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Input type="email" placeholder="caseworker@housing.gov" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input type="email" placeholder="caseworker@housing.gov" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Invite email" />
         <Button onClick={invite}>Invite</Button>
       </div>
       <ul className="divide-y divide-border rounded-lg border border-border bg-card">
         {members.map((m) => (
           <li key={m.id} className="flex justify-between p-3 text-sm">
             <span>{m.invited_email}</span>
-            <span className="text-muted-foreground">{m.role}</span>
+            <span className="text-muted-foreground">{m.user_id ? m.role : `${m.role} (pending sign-up)`}</span>
           </li>
         ))}
         {members.length === 0 && <li className="p-3 text-sm text-muted-foreground">No team members yet.</li>}
@@ -251,6 +277,35 @@ function AnalyticsTab({ programId }: { programId: string }) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function SettingsTab({ prog, onSaved }: { prog: ProgramFull; onSaved: () => void }) {
+  const [days, setDays] = useState<number>(prog.retention_days ?? 90);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    const { error } = await supabase
+      .from("programs")
+      .update({ retention_days: days } as never)
+      .eq("id", prog.id);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Retention window updated.");
+    onSaved();
+  }
+  return (
+    <div className="max-w-xl space-y-3 rounded-lg border border-border bg-card p-4">
+      <h2 className="font-semibold">Data retention</h2>
+      <p className="text-sm text-muted-foreground">
+        Uploaded document images are deleted automatically after this many days of inactivity, or once a decision is made — whichever comes first.
+      </p>
+      <div>
+        <Label htmlFor="ret">Days of inactivity before auto-purge</Label>
+        <Input id="ret" type="number" min={7} max={365} value={days} onChange={(e) => setDays(Math.max(7, Math.min(365, Number(e.target.value) || 90)))} />
+      </div>
+      <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
     </div>
   );
 }

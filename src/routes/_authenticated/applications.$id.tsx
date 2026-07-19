@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { signedUrl } from "@/lib/renter-api";
+import { Download, CheckCircle2, XCircle, AlertTriangle, Lock } from "lucide-react";
 
 interface Doc {
   id: string; requirement_id: string; doc_type: string; applicant_index: number;
@@ -11,11 +12,21 @@ interface Doc {
 }
 interface App {
   id: string; program_id: string; status: string; applicant: { name?: string }; co_applicants: { name?: string }[];
-  submitted_at: string | null; decided_at: string | null; packet_path: string | null;
+  submitted_at: string | null; decided_at: string | null; packet_path: string | null; manager_note: string | null;
 }
 interface Program { id: string; name: string; requirements: { id: string; name: string; perPerson: boolean }[] }
 
+const STATUS_LABELS: Record<string, string> = {
+  in_progress: "In progress",
+  submitted: "Awaiting review",
+  approved: "Approved",
+  rejected: "Not approved",
+  withdrawn: "Withdrawn",
+};
+const CLOSED = new Set(["approved", "rejected", "withdrawn"]);
+
 export const Route = createFileRoute("/_authenticated/applications/$id")({
+  head: () => ({ meta: [{ title: "Application review — DocKit" }, { name: "robots", content: "noindex" }] }),
   component: ReviewPage,
 });
 
@@ -25,13 +36,17 @@ function ReviewPage() {
   const [prog, setProg] = useState<Program | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
 
   const load = useCallback(async () => {
     const { data: a } = await supabase.from("applications").select("*").eq("id", id).single();
     if (!a) return;
-    setApp(a as App);
-    const { data: p } = await supabase.from("programs").select("id,name,requirements").eq("id", a.program_id).single();
-    setProg(p as Program);
+    setApp(a as unknown as App);
+    setNote((a as { manager_note?: string | null }).manager_note ?? "");
+    const { data: p } = await supabase.from("programs").select("id,name,requirements").eq("id", (a as { program_id: string }).program_id).single();
+    setProg(p as unknown as Program);
     const { data: d } = await supabase.from("documents").select("*").eq("application_id", id).order("created_at");
     setDocs(((d ?? []) as unknown) as Doc[]);
     const newUrls: Record<string, string> = {};
@@ -42,11 +57,23 @@ function ReviewPage() {
       }
     }
     setUrls(newUrls);
-  }, [id]);
+    if (!selected && d && d.length) setSelected((d[0] as { id: string }).id);
+  }, [id, selected]);
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: refresh when documents change (renter re-uploads, decision made, etc.)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`app-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "documents", filter: `application_id=eq.${id}` }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "applications", filter: `id=eq.${id}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, load]);
+
   async function decide(newStatus: "approved" | "rejected" | "withdrawn") {
-    if (!confirm(`Mark this application ${newStatus}? Uploaded images will be deleted.`)) return;
+    const label = newStatus === "approved" ? "approved" : newStatus === "rejected" ? "not approved" : "withdrawn";
+    if (!confirm(`Mark this application ${label}? Uploaded images will be deleted.`)) return;
     const { data, error } = await supabase.rpc("manager_decide_application", { _app_id: id, _new_status: newStatus });
     if (error) return toast.error(error.message);
     const paths = (data as string[] | null) ?? [];
@@ -55,67 +82,141 @@ function ReviewPage() {
     await load();
   }
 
+  async function saveNote() {
+    setNoteBusy(true);
+    const { error } = await supabase.from("applications").update({ manager_note: note } as never).eq("id", id);
+    setNoteBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Note saved. The renter will see it on their next visit.");
+  }
+
+  async function downloadPacket() {
+    if (!app?.packet_path) return;
+    const url = await signedUrl(app.packet_path);
+    if (!url) return toast.error("Packet is no longer available.");
+    window.open(url, "_blank");
+  }
+
   if (!app || !prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const people = [app.applicant, ...(app.co_applicants ?? [])];
+  const isClosed = CLOSED.has(app.status);
+  const slots: { req: (typeof prog.requirements)[number]; idx: number }[] = [];
+  for (const req of prog.requirements) {
+    people.forEach((_p, idx) => {
+      if (!req.perPerson && idx > 0) return;
+      slots.push({ req, idx });
+    });
+  }
+  const currentDoc = docs.find((d) => d.id === selected);
+  const currentSlot = currentDoc ? slots.find((s) => s.req.id === currentDoc.requirement_id && s.idx === currentDoc.applicant_index) : slots[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <Link to="/programs/$id" params={{ id: app.program_id }} className="text-sm text-muted-foreground hover:underline">← Back to program</Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{app.applicant?.name || "(unnamed applicant)"}</h1>
-            <p className="text-sm text-muted-foreground">Status: {app.status}</p>
+            <p className="text-sm text-muted-foreground">Status: {STATUS_LABELS[app.status] ?? app.status}</p>
           </div>
-          {app.status !== "approved" && app.status !== "rejected" && app.status !== "withdrawn" && (
-            <div className="flex gap-2">
-              <Button onClick={() => decide("approved")}>Approve</Button>
-              <Button variant="outline" onClick={() => decide("rejected")}>Reject</Button>
-              <Button variant="outline" onClick={() => decide("withdrawn")}>Withdraw</Button>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {app.packet_path && (
+              <Button variant="outline" onClick={downloadPacket}>
+                <Download className="mr-2 h-4 w-4" />Download packet
+              </Button>
+            )}
+            {!isClosed && (
+              <>
+                <Button onClick={() => decide("approved")}>Approve</Button>
+                <Button variant="outline" onClick={() => decide("rejected")}>Not approve</Button>
+                <Button variant="outline" onClick={() => decide("withdrawn")}>Withdraw</Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-3">
-        {prog.requirements.map((req) =>
-          people.map((_p, idx) => {
-            if (!req.perPerson && idx > 0) return null;
-            const d = docs.find((x) => x.requirement_id === req.id && x.applicant_index === idx);
-            const person = people[idx]?.name || `Person ${idx + 1}`;
-            return (
-              <div key={`${req.id}-${idx}`} className="rounded-lg border border-border bg-card p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium">{req.name}</p>
-                    {req.perPerson && <p className="text-xs text-muted-foreground">For {person}</p>}
-                  </div>
-                  {d && <StatusPill s={d.status} />}
-                </div>
-                {d?.exif_flag && (
-                  <p className="mt-2 rounded-md bg-warning/15 p-2 text-sm text-warning-foreground">
-                    Flagged for human review — editing software detected in metadata{d.exif_reason ? ` (${d.exif_reason})` : ""}. Not auto-rejected.
-                  </p>
-                )}
-                {d?.issues?.length ? (
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {d.issues.map((i, k) => <li key={k}>• {i.message}</li>)}
-                  </ul>
-                ) : null}
-                {d?.storage_path && urls[d.id] && (
-                  <a href={urls[d.id]} target="_blank" rel="noreferrer" className="mt-3 inline-block">
-                    <img src={urls[d.id]} alt={req.name} className="max-h-48 rounded-md border border-border" />
-                  </a>
-                )}
-                {d?.storage_path === null && app.decided_at && (
-                  <p className="mt-2 text-xs text-muted-foreground">Image deleted (application decided on {new Date(app.decided_at).toLocaleDateString()}).</p>
-                )}
-                {!d && <p className="mt-2 text-sm text-muted-foreground">Not uploaded yet.</p>}
+      {/* Desktop: side-by-side. Mobile: stacked. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+        {/* Document list */}
+        <aside className="space-y-2">
+          <div className="rounded-lg border border-border bg-card p-3">
+            <p className="text-sm font-semibold">Documents ({slots.length})</p>
+          </div>
+          <ul className="space-y-1">
+            {slots.map(({ req, idx }) => {
+              const d = docs.find((x) => x.requirement_id === req.id && x.applicant_index === idx);
+              const person = people[idx]?.name || `Person ${idx + 1}`;
+              const active = d ? selected === d.id : false;
+              return (
+                <li key={`${req.id}-${idx}`}>
+                  <button
+                    onClick={() => d && setSelected(d.id)}
+                    disabled={!d}
+                    className={`w-full rounded-md border p-3 text-left text-sm transition ${active ? "border-primary bg-accent" : "border-border bg-card hover:bg-muted"} ${!d ? "opacity-60" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{req.name}</p>
+                        {req.perPerson && <p className="text-xs text-muted-foreground">For {person}</p>}
+                      </div>
+                      {d && <StatusPill s={d.status} />}
+                    </div>
+                    {!d && <p className="mt-1 text-xs text-muted-foreground">Not uploaded</p>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="rounded-lg border border-border bg-card p-3">
+            <label className="text-sm font-semibold" htmlFor="mnote">Note to renter (optional)</label>
+            <textarea id="mnote" rows={3} value={note} onChange={(e) => setNote(e.target.value)}
+              className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              placeholder="e.g. Please retake the pay stub — the date is cut off." />
+            <Button size="sm" className="mt-2 w-full" onClick={saveNote} disabled={noteBusy || isClosed}>
+              {noteBusy ? "Saving…" : "Save note"}
+            </Button>
+            {isClosed && <p className="mt-1 text-xs text-muted-foreground"><Lock className="mr-1 inline h-3 w-3" />Application is closed.</p>}
+          </div>
+        </aside>
+
+        {/* Detail pane */}
+        <section className="rounded-lg border border-border bg-card p-4">
+          {!currentDoc && <p className="text-sm text-muted-foreground">Select a document on the left to review it.</p>}
+          {currentDoc && currentSlot && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-lg font-semibold">{currentSlot.req.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentSlot.req.perPerson ? `For ${people[currentSlot.idx]?.name || `Person ${currentSlot.idx + 1}`}` : "Household document"}
+                </p>
               </div>
-            );
-          }),
-        )}
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill s={currentDoc.status} />
+                {currentDoc.exif_flag && (
+                  <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground">
+                    Metadata flag{currentDoc.exif_reason ? ` — ${currentDoc.exif_reason}` : ""}
+                  </span>
+                )}
+              </div>
+              {currentDoc.issues?.length ? (
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {currentDoc.issues.map((i, k) => <li key={k}>• {i.message}</li>)}
+                </ul>
+              ) : null}
+              {currentDoc.storage_path && urls[currentDoc.id] ? (
+                <a href={urls[currentDoc.id]} target="_blank" rel="noreferrer">
+                  <img src={urls[currentDoc.id]} alt={currentSlot.req.name}
+                    className="max-h-[70vh] w-full rounded-md border border-border object-contain" />
+                </a>
+              ) : app.decided_at ? (
+                <p className="text-sm text-muted-foreground">Image deleted (application decided on {new Date(app.decided_at).toLocaleDateString()}).</p>
+              ) : null}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
@@ -123,5 +224,7 @@ function ReviewPage() {
 
 function StatusPill({ s }: { s: string }) {
   const cls = s === "pass" ? "status-pass" : s === "flagged" ? "status-flag" : "status-fail";
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{s.replace("_", " ")}</span>;
+  const label = s === "pass" ? "Looks good" : s === "flagged" ? "Needs a look" : s === "needs_fixing" ? "Needs fixing" : s;
+  const Icon = s === "pass" ? CheckCircle2 : s === "flagged" ? AlertTriangle : XCircle;
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}><Icon className="h-3 w-3" />{label}</span>;
 }

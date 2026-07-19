@@ -1,7 +1,7 @@
-# RealDoor
+# DocKit
 
 A renter-controlled copilot for affordable-housing paperwork. Built for
-the RealPage RealDoor hackathon challenge.
+the RealPage DocKit hackathon challenge.
 
 ## What it does
 

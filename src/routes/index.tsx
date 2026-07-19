@@ -1,12 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import logo from "/logo.png?url";
 
+const SITE_URL = "https://the-dockit.vercel.app";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "RealDoor — help renters send complete housing paperwork" },
-      { name: "description", content: "A renter-controlled copilot that checks affordable-housing documents on-device and hands a review-ready packet to a real reviewer. People decide eligibility, always." },
+      { title: "DocKit — help renters send complete housing paperwork" },
+      { name: "description", content: "A renter-controlled copilot that checks affordable-housing documents on-device before a human reviewer sees them. People decide eligibility, always." },
+      { property: "og:title", content: "DocKit — complete housing paperwork, on the first try" },
+      { property: "og:description", content: "Prevent one paperwork mistake from delaying an affordable-housing application for weeks." },
+      { property: "og:url", content: SITE_URL },
     ],
+    links: [{ rel: "canonical", href: SITE_URL }],
+    scripts: [{
+      type: "application/ld+json",
+      children: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "DocKit",
+        url: SITE_URL,
+      }),
+    }],
   }),
   component: Landing,
 });
@@ -17,12 +32,12 @@ function Landing() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <a href="/" className="flex items-center gap-2">
-            <img src={logo} alt="RealDoor" width={32} height={32} />
-            <span className="text-lg font-semibold">RealDoor</span>
+            <img src={logo} alt="DocKit logo" width={32} height={32} />
+            <span className="text-lg font-semibold">DocKit</span>
           </a>
           <nav className="flex items-center gap-2 text-sm">
-            <Link to="/auth" className="rounded-md px-3 py-2 hover:bg-muted">Sign in</Link>
-            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground">Get started</Link>
+            <Link to="/auth" search={{ mode: "signin" }} className="rounded-md px-3 py-2 hover:bg-muted">Sign in</Link>
+            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground">Create free account</Link>
           </nav>
         </div>
       </header>
@@ -33,7 +48,7 @@ function Landing() {
             Don't let one missing paper delay a home.
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            RealDoor helps renters put together complete, current, correctly-matched
+            DocKit helps renters put together complete, current, correctly-matched
             housing paperwork — checked on their own phone, before it ever reaches your desk.
             Your team still makes every eligibility decision.
           </p>
@@ -69,7 +84,7 @@ function Landing() {
 
       <footer className="border-t border-border">
         <div className="mx-auto max-w-5xl px-6 py-6 text-xs text-muted-foreground">
-          RealDoor does not decide who qualifies for housing. It helps make sure paperwork is complete before a person reviews it.
+          DocKit does not decide who qualifies for housing. It helps make sure paperwork is complete before a person reviews it.
         </div>
       </footer>
     </div>

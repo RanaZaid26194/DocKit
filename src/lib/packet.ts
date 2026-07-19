@@ -73,13 +73,15 @@ export async function buildPacket(
         x: 48, y: 700, size: 10, font, color: rgb(0.7, 0.45, 0),
       });
     }
-    // Fit image
+    // Fit image directly below the header block (top of image at y=680), so
+    // landscape photos don't leave a huge gap between the label and the image.
+    const topY = 680;
     const maxW = 516;
-    const maxH = 620;
+    const maxH = topY - 48; // leave 48pt bottom margin
     const scale = Math.min(maxW / img.width, maxH / img.height, 1);
     const w = img.width * scale;
     const h = img.height * scale;
-    page.drawImage(img, { x: (612 - w) / 2, y: 60, width: w, height: h });
+    page.drawImage(img, { x: (612 - w) / 2, y: topY - h, width: w, height: h });
   }
 
   return await pdf.save();

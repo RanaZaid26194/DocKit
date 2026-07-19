@@ -35,7 +35,7 @@ after reviewing.
 
 ## Retention
 
-- Nightly `pg_cron` job (`realdoor-purge-stale`) at **03:00 UTC** wipes
+- Nightly `pg_cron` job (`dockit-purge-stale`) at **03:00 UTC** wipes
   `documents.storage_path` for applications idle ≥ 90 days. It does
   **not** delete the physical storage objects; add a follow-up
   edge-function or Vercel cron that reads the nulled rows and issues

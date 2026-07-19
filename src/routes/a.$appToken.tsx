@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   getApplication, updateApplicant, saveDocument, startOver, uploadDoc, submitApplication,
@@ -7,6 +7,7 @@ import {
 import { runRules, type Requirement } from "@/lib/rules/engine";
 import { runOcr, checkExifTamper } from "@/lib/ocr";
 import { buildPacket } from "@/lib/packet";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,22 +18,24 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Camera, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock } from "lucide-react";
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
+const PDF_MIME = "application/pdf";
+const CLOSED = new Set(["approved", "rejected", "withdrawn"]);
+
+interface AppExtra extends ApplicationRow { manager_note?: string | null }
 
 export const Route = createFileRoute("/a/$appToken")({
-  head: () => ({ meta: [{ title: "Your application — RealDoor" }, { name: "robots", content: "noindex, nofollow" }] }),
+  head: () => ({ meta: [{ title: "Your application — DocKit" }, { name: "robots", content: "noindex, nofollow" }] }),
   component: RenterApp,
 });
 
 function RenterApp() {
   const { appToken } = Route.useParams();
-  const navigate = useNavigate();
-  const t = useT();
   const { lang, setLang } = useLang();
-  const [app, setApp] = useState<ApplicationRow | null>(null);
+  const [app, setApp] = useState<AppExtra | null>(null);
   const [program, setProgram] = useState<ProgramRow | null>(null);
   const [docs, setDocs] = useState<DocumentRow[]>([]);
   const [step, setStep] = useState<"applicant" | "docs" | "done">("applicant");
@@ -41,26 +44,49 @@ function RenterApp() {
   const load = useCallback(async () => {
     const res = await getApplication(appToken);
     if (!res) { toast.error("This link is not valid."); return; }
-    setApp(res.application); setProgram(res.program); setDocs(res.documents ?? []);
+    setApp(res.application as AppExtra); setProgram(res.program); setDocs(res.documents ?? []);
     if (res.application.language) setLang(res.application.language as Lang);
-    if (res.application.status === "submitted") setStep("done");
+    if (CLOSED.has(res.application.status)) setStep("done");
+    else if (res.application.status === "submitted") setStep("done");
     else if (res.application.applicant?.name) setStep("docs");
   }, [appToken, setLang]);
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: notify renter when a manager decides.
+  useEffect(() => {
+    if (!app) return;
+    const channel = supabase
+      .channel(`renter-${app.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "applications", filter: `id=eq.${app.id}` }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [app, load]);
+
   if (!app || !program) return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
+
+  const isClosed = CLOSED.has(app.status);
 
   const shell = (children: React.ReactNode) => (
     <div className="min-h-screen bg-background">
       <header className="no-print sticky top-0 z-10 border-b border-border bg-background">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="" width={24} height={24} />
-            <span className="font-semibold">RealDoor</span>
+            <img src={logo} alt="DocKit logo" width={24} height={24} />
+            <span className="font-semibold">DocKit</span>
           </div>
           <div className="flex items-center gap-3">
-            <select value={lang} onChange={async (e) => { const l = e.target.value as Lang; setLang(l); await updateApplicant(appToken, app.applicant, app.co_applicants ?? [], l); }}
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm">
+            <label htmlFor="lang-sel" className="sr-only">Language</label>
+            <select
+              id="lang-sel"
+              value={lang}
+              onChange={async (e) => {
+                const l = e.target.value as Lang;
+                setLang(l);
+                if (!isClosed) await updateApplicant(appToken, app.applicant, app.co_applicants ?? [], l);
+              }}
+              className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+              aria-label="Language"
+            >
               <option value="en">English</option>
               <option value="es">Español</option>
             </select>
@@ -71,12 +97,16 @@ function RenterApp() {
     </div>
   );
 
+  if (isClosed) {
+    return shell(<ClosedPage status={app.status} decidedAt={app.submitted_at} />);
+  }
+
   if (step === "applicant") return shell(<ApplicantForm app={app} onSaved={async (a, co) => {
     await updateApplicant(appToken, a, co, lang);
     await load(); setStep("docs");
   }} />);
 
-  if (step === "done") return shell(<DonePage app={app} program={program} docs={docs} />);
+  if (step === "done") return shell(<DonePage app={app} />);
 
   return shell(
     <Checklist
@@ -89,12 +119,11 @@ function RenterApp() {
       onFinish={async () => {
         const bytes = await buildPacket(app, program, docs);
         const path = `${appToken}/${app.id}/packet-${Date.now()}.pdf`;
-        const { error } = await import("@/integrations/supabase/client").then(({ supabase }) =>
-          supabase.storage.from("documents").upload(path, new Blob([new Uint8Array(bytes)], { type: "application/pdf" })),
-        );
+        const { error } = await supabase.storage
+          .from("documents")
+          .upload(path, new Blob([new Uint8Array(bytes)], { type: "application/pdf" }));
         if (error) { toast.error(error.message); return; }
         await submitApplication(appToken, path);
-        // Also give the renter a local download
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "application/pdf" }));
         const a = document.createElement("a"); a.href = url; a.download = "housing-packet.pdf"; a.click();
         URL.revokeObjectURL(url);
@@ -141,9 +170,27 @@ function ApplicantForm({ app, onSaved }: { app: ApplicationRow; onSaved: (a: App
 }
 
 interface ChecklistProps {
-  program: ProgramRow; app: ApplicationRow; docs: DocumentRow[]; token: string;
+  program: ProgramRow; app: AppExtra; docs: DocumentRow[]; token: string;
   onDocProcessed: () => Promise<void>; onStartOver: () => Promise<void>; onFinish: () => Promise<void>;
   printable: boolean; togglePrintable: () => void;
+}
+
+async function pdfFirstPageToJpeg(file: File): Promise<File> {
+  // Rasterize the first page of a PDF into a JPEG so Tesseract can read it.
+  const pdfjs = await import("pdfjs-dist");
+  // Vite worker resolution — bundle-friendly.
+  const workerUrl = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
+  (pdfjs as unknown as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc = workerUrl;
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjs.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d")!;
+  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.9));
+  return new File([blob], file.name.replace(/\.pdf$/i, ".jpg"), { type: "image/jpeg" });
 }
 
 function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onFinish, printable, togglePrintable }: ChecklistProps) {
@@ -152,8 +199,15 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [finishBusy, setFinishBusy] = useState(false);
 
-  async function handleFile(req: Requirement, applicantIndex: number, file: File) {
-    if (!ALLOWED.includes(file.type)) return toast.error("Please upload a JPG, PNG, or WEBP image.");
+  async function handleFile(req: Requirement, applicantIndex: number, incoming: File) {
+    let file = incoming;
+    if (file.type === PDF_MIME) {
+      if (file.size > MAX_BYTES) return toast.error("File is too large (max 10 MB).");
+      try { file = await pdfFirstPageToJpeg(file); }
+      catch { return toast.error("We couldn't open that PDF. Try a photo instead."); }
+    } else if (!ALLOWED_IMG.includes(file.type)) {
+      return toast.error("Please upload a JPG, PNG, WEBP, or PDF.");
+    }
     if (file.size > MAX_BYTES) return toast.error("File is too large (max 10 MB).");
     const key = `${req.id}-${applicantIndex}`;
     setBusyKey(key);
@@ -181,7 +235,6 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
   }
 
   async function acknowledge(doc: DocumentRow) {
-    // "I know — this photo is fine": mark the flagged doc as pass locally by re-saving with pass status.
     await saveDocument({
       token, requirementId: doc.requirement_id, docType: doc.doc_type, applicantIndex: doc.applicant_index,
       storagePath: doc.storage_path, ocrText: "", status: "pass",
@@ -190,7 +243,6 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
     await onDocProcessed();
   }
 
-  // How many required slots are complete (pass or acknowledged flagged)?
   const slots: { req: Requirement; applicantIndex: number }[] = [];
   for (const req of program.requirements) {
     if (req.perPerson) people.forEach((_p, i) => slots.push({ req, applicantIndex: i }));
@@ -203,6 +255,12 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
 
   return (
     <div className="space-y-4">
+      {app.manager_note && (
+        <div className="rounded-lg border border-primary/30 bg-accent p-3 text-sm">
+          <p className="font-medium">A note from the housing office</p>
+          <p className="mt-1 whitespace-pre-wrap">{app.manager_note}</p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{t("checklist.title")}</h1>
@@ -242,11 +300,17 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
               </ul>
             ) : null}
 
-            <div className="mt-3 flex items-center gap-2 no-print">
+            <div className="mt-3 flex flex-wrap items-center gap-2 no-print">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
                 <Camera className="h-4 w-4" />
-                {d ? t("checklist.retake") : t("checklist.upload")}
+                {d ? "Retake photo" : "Take photo"}
                 <input type="file" accept="image/*" capture="environment" className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
+                <Upload className="h-4 w-4" />
+                Upload file
+                <input type="file" accept="image/*,application/pdf" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
               </label>
               {busyKey === key && <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("checklist.checking")}</span>}
@@ -305,7 +369,7 @@ function PrintableView({ program, people, docs }: { program: ProgramRow; people:
   );
 }
 
-function DonePage({ app }: { app: ApplicationRow; program: ProgramRow; docs: DocumentRow[] }) {
+function DonePage({ app }: { app: ApplicationRow }) {
   const t = useT();
   return (
     <div className="space-y-4">
@@ -313,6 +377,25 @@ function DonePage({ app }: { app: ApplicationRow; program: ProgramRow; docs: Doc
       <p className="text-base">{t("done.body")}</p>
       <p className="text-xs text-muted-foreground">Reference: {app.id}</p>
       <p className="pt-6 text-xs text-muted-foreground">{t("footer.notLegal")}</p>
+    </div>
+  );
+}
+
+function ClosedPage({ status, decidedAt }: { status: string; decidedAt: string | null }) {
+  const messages: Record<string, { title: string; body: string }> = {
+    approved: { title: "Application approved", body: "Your housing office marked this application approved. They'll contact you with next steps." },
+    rejected: { title: "Application closed", body: "This application has been closed by the housing office. Please contact them directly to discuss next steps." },
+    withdrawn: { title: "Application withdrawn", body: "This application has been withdrawn. Contact the housing office if this was in error." },
+  };
+  const m = messages[status] ?? { title: "Application closed", body: "This application is no longer editable." };
+  return (
+    <div className="space-y-3">
+      <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs">
+        <Lock className="h-3 w-3" />Closed
+      </div>
+      <h1 className="text-2xl font-semibold">{m.title}</h1>
+      <p className="text-base">{m.body}</p>
+      {decidedAt && <p className="text-xs text-muted-foreground">Decided on {new Date(decidedAt).toLocaleDateString()}.</p>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-## Secrets for RealDoor
+## Secrets for DocKit
 
 All secrets are loaded from environment variables. Use placeholder values in
 your local `.env.example`; set real values in the Vercel and Supabase

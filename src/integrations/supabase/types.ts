@@ -23,6 +23,7 @@ export type Database = {
           id: string
           language: string
           last_activity_at: string
+          manager_note: string | null
           packet_path: string | null
           program_id: string
           session_token: string
@@ -37,6 +38,7 @@ export type Database = {
           id?: string
           language?: string
           last_activity_at?: string
+          manager_note?: string | null
           packet_path?: string | null
           program_id: string
           session_token?: string
@@ -51,6 +53,7 @@ export type Database = {
           id?: string
           language?: string
           last_activity_at?: string
+          manager_note?: string | null
           packet_path?: string | null
           program_id?: string
           session_token?: string
@@ -159,6 +162,7 @@ export type Database = {
           owner_id: string
           program_type: Database["public"]["Enums"]["program_type"]
           requirements: Json
+          retention_days: number
           updated_at: string
         }
         Insert: {
@@ -169,6 +173,7 @@ export type Database = {
           owner_id: string
           program_type?: Database["public"]["Enums"]["program_type"]
           requirements?: Json
+          retention_days?: number
           updated_at?: string
         }
         Update: {
@@ -179,6 +184,7 @@ export type Database = {
           owner_id?: string
           program_type?: Database["public"]["Enums"]["program_type"]
           requirements?: Json
+          retention_days?: number
           updated_at?: string
         }
         Relationships: []

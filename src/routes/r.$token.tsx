@@ -9,7 +9,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/r/$token")({
   head: () => ({
     meta: [
-      { title: "Start your application — RealDoor" },
+      { title: "Start your application — DocKit" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -58,7 +58,7 @@ function RenterLanding() {
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <img src={logo} alt="" width={28} height={28} />
-            <span className="font-semibold">RealDoor</span>
+            <span className="font-semibold">DocKit</span>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">{t("intro.language")}</span>

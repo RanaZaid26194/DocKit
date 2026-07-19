@@ -18,8 +18,8 @@ export const Route = createFileRoute("/auth")({
   validateSearch: (s) => searchSchema.parse(s),
   head: () => ({
     meta: [
-      { title: "Sign in — RealDoor" },
-      { name: "description", content: "Housing office sign in and account creation for RealDoor." },
+      { title: "Sign in — DocKit" },
+      { name: "description", content: "Housing office sign in and account creation for DocKit." },
       { name: "robots", content: "noindex" },
     ],
   }),

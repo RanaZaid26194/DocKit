@@ -24,7 +24,7 @@ function AuthedLayout() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link to="/dashboard" className="flex items-center gap-2">
             <img src={logo} alt="" width={28} height={28} />
-            <span className="font-semibold">RealDoor</span>
+            <span className="font-semibold">DocKit</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             <Link to="/dashboard" className="hover:underline">Programs</Link>

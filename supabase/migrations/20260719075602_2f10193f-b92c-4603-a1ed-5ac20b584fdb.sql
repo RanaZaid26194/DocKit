@@ -46,7 +46,7 @@ CREATE POLICY "manager delete program docs" ON storage.objects FOR DELETE TO aut
 -- Nightly purge job: applications idle >= 90 days, wipe images
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 SELECT cron.schedule(
-  'realdoor-purge-stale',
+  'dockit-purge-stale',
   '0 3 * * *',
   $$UPDATE public.documents d SET storage_path = NULL
       WHERE d.storage_path IS NOT NULL AND EXISTS (
