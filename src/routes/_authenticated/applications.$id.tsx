@@ -98,6 +98,29 @@ function ReviewPage() {
     window.open(url, "_blank");
   }
 
+  /**
+   * "Ask renter to retake" resets one document to `needs_fixing` so the renter's
+   * checklist re-opens that slot. We also clear the OCR text so the next upload
+   * doesn't get compared against stale content, and append a short note to the
+   * manager's overall note so the renter sees why.
+   */
+  async function requestRetake(doc: Doc) {
+    if (!confirm(`Ask the renter to retake "${doc.doc_type}"?`)) return;
+    const reason = prompt("Optional note for the renter (why this needs a retake):", "") ?? "";
+    const { error } = await supabase.from("documents")
+      .update({ status: "needs_fixing", ocr_text: "" } as never)
+      .eq("id", doc.id);
+    if (error) return toast.error(error.message);
+    if (reason.trim()) {
+      const prefix = `Please retake "${doc.doc_type}": ${reason.trim()}`;
+      const combined = note ? `${prefix}\n\n${note}` : prefix;
+      setNote(combined);
+      await supabase.from("applications").update({ manager_note: combined } as never).eq("id", id);
+    }
+    toast.success("Retake requested. The renter will see this on their next visit.");
+    await load();
+  }
+
   if (!app || !prog) return <Spinner label="Loading application" />;
 
   const people = [app.applicant, ...(app.co_applicants ?? [])];
