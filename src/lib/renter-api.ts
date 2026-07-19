@@ -63,8 +63,8 @@ export async function updateApplicant(
 ) {
   const { error } = await supabase.rpc("renter_update_applicant", {
     _token: token,
-    _applicant: applicant as unknown as Record<string, unknown>,
-    _co: co as unknown as Record<string, unknown>[],
+    _applicant: applicant as never,
+    _co: co as never,
     _lang: lang,
   });
   if (error) throw error;
@@ -92,7 +92,7 @@ export async function saveDocument(input: SaveDocInput) {
     _storage_path: input.storagePath ?? "",
     _ocr_text: input.ocrText,
     _status: input.status,
-    _issues: input.issues as unknown as Record<string, unknown>[],
+    _issues: input.issues as never,
     _exif_flag: input.exifFlag,
     _exif_reason: input.exifReason ?? "",
   });
