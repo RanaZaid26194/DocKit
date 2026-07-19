@@ -69,7 +69,7 @@ export type DictKey = keyof typeof EN;
 
 // Only the strings that meaningfully change per locale are hand-translated;
 // missing keys fall back to English so the UI never shows raw keys.
-type Partial = Partial<Record<DictKey, string>>;
+type PartialDict = Partial<Record<DictKey, string>>;
 
 const ES: Partial = {
   "intro.title": "Prepare sus documentos de vivienda",
