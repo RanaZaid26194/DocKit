@@ -14,16 +14,279 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applications: {
+        Row: {
+          applicant: Json
+          co_applicants: Json
+          created_at: string
+          decided_at: string | null
+          id: string
+          language: string
+          last_activity_at: string
+          packet_path: string | null
+          program_id: string
+          session_token: string
+          status: Database["public"]["Enums"]["application_status"]
+          submitted_at: string | null
+        }
+        Insert: {
+          applicant?: Json
+          co_applicants?: Json
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          language?: string
+          last_activity_at?: string
+          packet_path?: string | null
+          program_id: string
+          session_token?: string
+          status?: Database["public"]["Enums"]["application_status"]
+          submitted_at?: string | null
+        }
+        Update: {
+          applicant?: Json
+          co_applicants?: Json
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          language?: string
+          last_activity_at?: string
+          packet_path?: string | null
+          program_id?: string
+          session_token?: string
+          status?: Database["public"]["Enums"]["application_status"]
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applications_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          acknowledged: boolean
+          applicant_index: number
+          application_id: string
+          created_at: string
+          doc_type: string
+          exif_flag: boolean
+          exif_reason: string | null
+          id: string
+          issues: Json
+          ocr_text: string | null
+          requirement_id: string
+          status: Database["public"]["Enums"]["doc_status"]
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          acknowledged?: boolean
+          applicant_index?: number
+          application_id: string
+          created_at?: string
+          doc_type: string
+          exif_flag?: boolean
+          exif_reason?: string | null
+          id?: string
+          issues?: Json
+          ocr_text?: string | null
+          requirement_id: string
+          status?: Database["public"]["Enums"]["doc_status"]
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acknowledged?: boolean
+          applicant_index?: number
+          application_id?: string
+          created_at?: string
+          doc_type?: string
+          exif_flag?: boolean
+          exif_reason?: string | null
+          id?: string
+          issues?: Json
+          ocr_text?: string | null
+          requirement_id?: string
+          status?: Database["public"]["Enums"]["doc_status"]
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          contact_email: string
+          created_at: string
+          id: string
+          org_name: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string
+          created_at?: string
+          id: string
+          org_name?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string
+          created_at?: string
+          id?: string
+          org_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      programs: {
+        Row: {
+          created_at: string
+          id: string
+          link_token: string
+          name: string
+          owner_id: string
+          program_type: Database["public"]["Enums"]["program_type"]
+          requirements: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link_token?: string
+          name: string
+          owner_id: string
+          program_type?: Database["public"]["Enums"]["program_type"]
+          requirements?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link_token?: string
+          name?: string
+          owner_id?: string
+          program_type?: Database["public"]["Enums"]["program_type"]
+          requirements?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          id: string
+          invited_email: string
+          program_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_email: string
+          program_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_email?: string
+          program_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_program: { Args: { _program_id: string }; Returns: boolean }
+      manager_decide_application: {
+        Args: { _app_id: string; _new_status: string }
+        Returns: string[]
+      }
+      renter_get_application: { Args: { _token: string }; Returns: Json }
+      renter_get_program: { Args: { _token: string }; Returns: Json }
+      renter_save_document: {
+        Args: {
+          _applicant_index: number
+          _doc_type: string
+          _exif_flag: boolean
+          _exif_reason: string
+          _issues: Json
+          _ocr_text: string
+          _requirement_id: string
+          _status: string
+          _storage_path: string
+          _token: string
+        }
+        Returns: string
+      }
+      renter_start_application: {
+        Args: { _program_token: string }
+        Returns: string
+      }
+      renter_start_over: { Args: { _token: string }; Returns: string[] }
+      renter_submit: {
+        Args: { _packet_path: string; _token: string }
+        Returns: undefined
+      }
+      renter_update_applicant: {
+        Args: { _applicant: Json; _co: Json; _lang: string; _token: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "owner" | "member"
+      application_status:
+        | "in_progress"
+        | "submitted"
+        | "approved"
+        | "rejected"
+        | "withdrawn"
+      doc_status: "pending" | "pass" | "needs_fixing" | "flagged"
+      program_type: "section8" | "lihtc" | "public_housing" | "custom"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +413,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["owner", "member"],
+      application_status: [
+        "in_progress",
+        "submitted",
+        "approved",
+        "rejected",
+        "withdrawn",
+      ],
+      doc_status: ["pending", "pass", "needs_fixing", "flagged"],
+      program_type: ["section8", "lihtc", "public_housing", "custom"],
+    },
   },
 } as const
