@@ -1,0 +1,21 @@
+# DocKit
+
+> Renter-controlled copilot that checks affordable-housing paperwork on the renter's own device (OCR + EXIF), then hands a review-ready packet to a housing office. Never decides eligibility — humans always do.
+
+- Site: https://the-dockit.vercel.app
+- Docs: https://the-dockit.vercel.app (landing)
+
+## Key pages
+
+- [/](https://the-dockit.vercel.app/) — What DocKit is and how it works
+- [/auth](https://the-dockit.vercel.app/auth) — Sign in / create housing office account
+
+## What DocKit is not
+
+- Not a chatbot; not a conversational LLM interface
+- Not an eligibility decision engine
+- No cloud AI calls — document text recognition runs 100% in the renter's browser
+
+## Contact
+
+Public preview only; contact the operator listed on the site.

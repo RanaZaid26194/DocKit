@@ -1,6 +1,6 @@
 {
-  "name": "RealDoor",
-  "short_name": "RealDoor",
+  "name": "DocKit",
+  "short_name": "DocKit",
   "description": "A renter-controlled copilot for affordable-housing paperwork.",
   "start_url": "/",
   "display": "standalone",

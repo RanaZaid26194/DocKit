@@ -1,4 +1,4 @@
-// RealDoor deterministic rule engine.
+// DocKit deterministic rule engine.
 //
 // Every check runs on OCR text (a string) and returns a Result. No cloud
 // calls, no LLM, no fuzzy inference. The rules are intentionally lenient —

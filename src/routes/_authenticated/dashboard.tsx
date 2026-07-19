@@ -11,6 +11,7 @@ import { Plus } from "lucide-react";
 interface ProgRow { id: string; name: string; program_type: string; link_token: string; created_at: string }
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
+  head: () => ({ meta: [{ title: "Programs — DocKit" }, { name: "robots", content: "noindex" }] }),
   component: Dashboard,
 });
 
@@ -30,6 +31,15 @@ function Dashboard() {
   }
   useEffect(() => { load(); }, []);
 
+  // Realtime: refresh list when a program changes.
+  useEffect(() => {
+    const channel = supabase
+      .channel("dashboard-programs")
+      .on("postgres_changes", { event: "*", schema: "public", table: "programs" }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   async function create() {
     const { data: userRes } = await supabase.auth.getUser();
     if (!userRes.user) return;
@@ -47,7 +57,7 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Your programs</h1>
           <p className="text-sm text-muted-foreground">Create a program, share the link with renters, review packets as they come in.</p>
@@ -59,7 +69,7 @@ function Dashboard() {
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="font-semibold">Create a new program</h2>
           <p className="mt-1 text-xs text-muted-foreground">{PRESET_DISCLAIMER}</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
               <Label htmlFor="pname">Program name</Label>
               <Input id="pname" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Section 8 — 2026 waitlist" />
@@ -82,9 +92,12 @@ function Dashboard() {
       )}
 
       {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No programs yet. Create your first one above.</p>
+        <div className="rounded-lg border border-dashed border-border bg-card p-10 text-center">
+          <p className="text-base font-medium">No programs yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create your first program above to get a share link.</p>
+        </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
             <li key={r.id} className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-2">

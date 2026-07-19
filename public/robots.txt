@@ -3,4 +3,4 @@ Allow: /
 Disallow: /a/
 Disallow: /r/
 
-Sitemap: /sitemap.xml
+Sitemap: https://the-dockit.vercel.app/sitemap.xml
