@@ -7,6 +7,7 @@ import { PRESETS, PRESET_DISCLAIMER, type PresetKey } from "@/lib/presets";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ProgRow { id: string; name: string; program_type: string; link_token: string; created_at: string }
 
@@ -91,7 +92,7 @@ function Dashboard() {
         </div>
       )}
 
-      {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : rows.length === 0 ? (
+      {loading ? <Spinner label="Loading your programs" /> : rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card p-10 text-center">
           <p className="text-base font-medium">No programs yet</p>
           <p className="mt-1 text-sm text-muted-foreground">Create your first program above to get a share link.</p>

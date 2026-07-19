@@ -60,6 +60,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:site_name", content: "DocKit" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // og:image is intentionally NOT set here — the root head concatenates
+      // into every match, which would clobber leaf routes that set their
+      // own share image. The landing route sets the default preview image.
     ],
     links: [
       { rel: "stylesheet", href: appCss },

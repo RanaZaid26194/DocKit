@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { signedUrl } from "@/lib/renter-api";
-import { Download, CheckCircle2, XCircle, AlertTriangle, Lock } from "lucide-react";
+import { Download, CheckCircle2, XCircle, AlertTriangle, Lock, RotateCcw } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Doc {
   id: string; requirement_id: string; doc_type: string; applicant_index: number;
@@ -97,7 +98,30 @@ function ReviewPage() {
     window.open(url, "_blank");
   }
 
-  if (!app || !prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  /**
+   * "Ask renter to retake" resets one document to `needs_fixing` so the renter's
+   * checklist re-opens that slot. We also clear the OCR text so the next upload
+   * doesn't get compared against stale content, and append a short note to the
+   * manager's overall note so the renter sees why.
+   */
+  async function requestRetake(doc: Doc) {
+    if (!confirm(`Ask the renter to retake "${doc.doc_type}"?`)) return;
+    const reason = prompt("Optional note for the renter (why this needs a retake):", "") ?? "";
+    const { error } = await supabase.from("documents")
+      .update({ status: "needs_fixing", ocr_text: "" } as never)
+      .eq("id", doc.id);
+    if (error) return toast.error(error.message);
+    if (reason.trim()) {
+      const prefix = `Please retake "${doc.doc_type}": ${reason.trim()}`;
+      const combined = note ? `${prefix}\n\n${note}` : prefix;
+      setNote(combined);
+      await supabase.from("applications").update({ manager_note: combined } as never).eq("id", id);
+    }
+    toast.success("Retake requested. The renter will see this on their next visit.");
+    await load();
+  }
+
+  if (!app || !prog) return <Spinner label="Loading application" />;
 
   const people = [app.applicant, ...(app.co_applicants ?? [])];
   const isClosed = CLOSED.has(app.status);
@@ -199,6 +223,11 @@ function ReviewPage() {
                   <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning-foreground">
                     Metadata flag{currentDoc.exif_reason ? ` — ${currentDoc.exif_reason}` : ""}
                   </span>
+                )}
+                {!isClosed && currentDoc.storage_path && (
+                  <Button size="sm" variant="outline" onClick={() => requestRetake(currentDoc)}>
+                    <RotateCcw className="mr-1 h-3 w-3" />Ask for retake
+                  </Button>
                 )}
               </div>
               {currentDoc.issues?.length ? (

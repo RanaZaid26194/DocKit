@@ -15,6 +15,7 @@ export interface ApplicationRow {
   language: string;
   packet_path: string | null;
   submitted_at: string | null;
+  decided_at?: string | null;
 }
 export interface ProgramRow {
   id: string;

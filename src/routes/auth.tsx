@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional().default("signin"),
@@ -49,15 +50,14 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
+      // hCaptcha now gates BOTH sign-in and sign-up when configured, so
+      // credential-stuffing scripts can't hammer the sign-in path either.
+      if (siteKey) {
+        if (!captchaToken) { toast.error("Please complete the check first."); return; }
+        const res = await verify({ data: { token: captchaToken } });
+        if (!res.ok) { toast.error("Bot check failed. Please try again."); captchaRef.current?.resetCaptcha(); setCaptchaToken(null); return; }
+      }
       if (tab === "signup") {
-        // Server-side verification of the hCaptcha token — client-only would
-        // be trivially bypassable. If no secret is configured we treat it as
-        // pass and note in SECRETS.md.
-        if (siteKey) {
-          if (!captchaToken) { toast.error("Please complete the check first."); return; }
-          const res = await verify({ data: { token: captchaToken } });
-          if (!res.ok) { toast.error("Bot check failed. Please try again."); captchaRef.current?.resetCaptcha(); setCaptchaToken(null); return; }
-        }
         const { error } = await supabase.auth.signUp({
           email, password,
           options: {
@@ -91,9 +91,9 @@ function AuthPage() {
 
         <div className="mt-6 flex gap-1 rounded-md border border-border p-1">
           <button type="button" onClick={() => setTab("signin")}
-            className={`flex-1 rounded px-3 py-2 text-sm ${tab === "signin" ? "bg-primary text-primary-foreground" : ""}`}>Sign in</button>
+            className={`flex-1 rounded px-3 py-2 text-sm ${tab === "signin" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Sign in</button>
           <button type="button" onClick={() => setTab("signup")}
-            className={`flex-1 rounded px-3 py-2 text-sm ${tab === "signup" ? "bg-primary text-primary-foreground" : ""}`}>Create account</button>
+            className={`flex-1 rounded px-3 py-2 text-sm ${tab === "signup" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Create account</button>
         </div>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -112,13 +112,15 @@ function AuthPage() {
             <Input id="password" type="password" autoComplete={tab === "signin" ? "current-password" : "new-password"}
               value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} maxLength={200} />
           </div>
-          {tab === "signup" && siteKey && (
+          {siteKey && (
             <HCaptcha sitekey={siteKey} ref={captchaRef} onVerify={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
           )}
           <Button type="submit" disabled={busy} className="w-full">
-            {busy ? "Please wait…" : tab === "signup" ? "Create account" : "Sign in"}
+            {busy ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />Please wait</>
+            ) : tab === "signup" ? "Create account" : "Sign in"}
           </Button>
-          {tab === "signup" && !siteKey && (
+          {!siteKey && (
             <p className="text-xs text-muted-foreground">
               Bot check will activate once VITE_HCAPTCHA_SITE_KEY is configured (see SECRETS.md).
             </p>
