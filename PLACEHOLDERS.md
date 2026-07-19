@@ -11,11 +11,23 @@ after reviewing.
   and an SSR shell). It builds and deploys cleanly to Vercel with the
   `@vercel/build` preset — no manual step needed. Kept as-is so the
   auth-middleware/server-function/DB tooling all continues to work.
-- **PDF uploads**: not implemented in v1. Only image uploads
-  (JPG/PNG/WEBP, max 10 MB). Tesseract can't read PDFs without a pdf.js
-  render step; deferred to `suggested-features.md`.
+- **PDF uploads**: supported via pdf.js — first page rasterized to JPEG
+  before OCR. Multi-page PDFs are OCR'd from page 1 only.
 - **No Vercel `rewrites`**: TanStack Router handles deep links; nothing
   extra needed.
+- **Canonical/OG URLs**: hardcoded to `https://the-dockit.vercel.app`
+  per the round-2 brief. Change in `__root.tsx`, `index.tsx`,
+  `sitemap[.]xml.ts`, `robots.txt`, and `llms.txt` if the domain moves.
+- **Self-hosted fonts**: `@fontsource/inter` provides the required weights.
+  No Google Fonts request at runtime.
+- **Vercel Web Analytics**: `<Analytics />` mounts in `__root.tsx`.
+- **MailerSend**: wired through Supabase Auth SMTP for auth emails; the
+  API token is available for future server-route sends.
+- **Realtime**: subscriptions live on `applications` and `documents` for
+  both manager (dashboard, review) and renter (decision push).
+- **Retention window**: configurable per program in `programs.retention_days`
+  (7–365). Nightly `pg_cron` job respects the per-program value.
+- **Team invites**: auto-linked at signup by the `handle_new_user` trigger.
 
 ## Preset requirement lists
 
