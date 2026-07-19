@@ -224,6 +224,11 @@ function ReviewPage() {
                     Metadata flag{currentDoc.exif_reason ? ` — ${currentDoc.exif_reason}` : ""}
                   </span>
                 )}
+                {!isClosed && currentDoc.storage_path && (
+                  <Button size="sm" variant="outline" onClick={() => requestRetake(currentDoc)}>
+                    <RotateCcw className="mr-1 h-3 w-3" />Ask for retake
+                  </Button>
+                )}
               </div>
               {currentDoc.issues?.length ? (
                 <ul className="space-y-1 text-sm text-muted-foreground">
