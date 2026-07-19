@@ -26,7 +26,7 @@ const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
 const PDF_MIME = "application/pdf";
 const CLOSED = new Set(["approved", "rejected", "withdrawn"]);
 
-interface AppExtra extends ApplicationRow { manager_note?: string | null }
+interface AppExtra extends ApplicationRow { manager_note?: string | null; decided_at?: string | null }
 
 export const Route = createFileRoute("/a/$appToken")({
   head: () => ({ meta: [{ title: "Your application — DocKit" }, { name: "robots", content: "noindex, nofollow" }] }),
