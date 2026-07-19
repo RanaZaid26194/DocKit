@@ -19,6 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
@@ -62,7 +63,7 @@ function RenterApp() {
     return () => { supabase.removeChannel(channel); };
   }, [app, load]);
 
-  if (!app || !program) return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
+  if (!app || !program) return <Spinner label="Loading your application" />;
 
   const isClosed = CLOSED.has(app.status);
 
@@ -98,7 +99,7 @@ function RenterApp() {
   );
 
   if (isClosed) {
-    return shell(<ClosedPage status={app.status} decidedAt={app.submitted_at} />);
+    return shell(<ClosedPage status={app.status} decidedAt={app.decided_at ?? app.submitted_at} programToken={program.link_token ?? null} />);
   }
 
   if (step === "applicant") return shell(<ApplicantForm app={app} onSaved={async (a, co) => {
@@ -381,21 +382,32 @@ function DonePage({ app }: { app: ApplicationRow }) {
   );
 }
 
-function ClosedPage({ status, decidedAt }: { status: string; decidedAt: string | null }) {
-  const messages: Record<string, { title: string; body: string }> = {
-    approved: { title: "Application approved", body: "Your housing office marked this application approved. They'll contact you with next steps." },
-    rejected: { title: "Application closed", body: "This application has been closed by the housing office. Please contact them directly to discuss next steps." },
-    withdrawn: { title: "Application withdrawn", body: "This application has been withdrawn. Contact the housing office if this was in error." },
+function ClosedPage({ status, decidedAt, programToken }: { status: string; decidedAt: string | null; programToken: string | null }) {
+  const messages: Record<string, { title: string; body: string; tone: string }> = {
+    approved: { title: "Application approved", body: "Your housing office marked this application approved. They'll contact you with next steps.", tone: "status-pass" },
+    rejected: { title: "Application closed", body: "This application has been closed by the housing office. Please contact them directly to discuss next steps.", tone: "status-fail" },
+    withdrawn: { title: "Application withdrawn", body: "This application has been withdrawn. Contact the housing office if this was in error.", tone: "status-flag" },
   };
-  const m = messages[status] ?? { title: "Application closed", body: "This application is no longer editable." };
+  const m = messages[status] ?? { title: "Application closed", body: "This application is no longer editable.", tone: "status-flag" };
+  function startNew() {
+    // Clear the localStorage marker keyed by program token so `begin()` on the
+    // renter landing spins up a fresh application row.
+    if (programToken) localStorage.removeItem(`rd:app:${programToken}`);
+    if (programToken) window.location.href = `/r/${programToken}`;
+  }
   return (
-    <div className="space-y-3">
-      <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs">
+    <div className="space-y-4">
+      <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${m.tone}`}>
         <Lock className="h-3 w-3" />Closed
       </div>
       <h1 className="text-2xl font-semibold">{m.title}</h1>
       <p className="text-base">{m.body}</p>
       {decidedAt && <p className="text-xs text-muted-foreground">Decided on {new Date(decidedAt).toLocaleDateString()}.</p>}
+      {programToken && (
+        <div className="pt-2">
+          <Button onClick={startNew} variant="outline">Start a new application</Button>
+        </div>
+      )}
     </div>
   );
 }
