@@ -1,0 +1,13 @@
+{
+  "name": "RealDoor",
+  "short_name": "RealDoor",
+  "description": "A renter-controlled copilot for affordable-housing paperwork.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f0",
+  "theme_color": "#0f5257",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
