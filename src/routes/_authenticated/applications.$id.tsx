@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { signedUrl } from "@/lib/renter-api";
-import { Download, CheckCircle2, XCircle, AlertTriangle, Lock } from "lucide-react";
+import { Download, CheckCircle2, XCircle, AlertTriangle, Lock, RotateCcw } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Doc {
   id: string; requirement_id: string; doc_type: string; applicant_index: number;
@@ -97,7 +98,7 @@ function ReviewPage() {
     window.open(url, "_blank");
   }
 
-  if (!app || !prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!app || !prog) return <Spinner label="Loading application" />;
 
   const people = [app.applicant, ...(app.co_applicants ?? [])];
   const isClosed = CLOSED.has(app.status);
