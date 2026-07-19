@@ -24,7 +24,7 @@ export async function runOcr(image: Blob | File): Promise<string> {
 export async function checkExifTamper(image: Blob | File): Promise<{ flagged: boolean; reason?: string }> {
   try {
     const exifr = (await import("exifr")).default;
-    const data = (await exifr.parse(image as Blob, { tiff: true, exif: true, ifd0: true })) as
+    const data = (await exifr.parse(image as Blob)) as
       | { Software?: unknown; ProcessingSoftware?: unknown; CreatorTool?: unknown }
       | undefined;
     if (!data) return { flagged: false };

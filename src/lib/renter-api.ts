@@ -40,7 +40,7 @@ export interface DocumentRow {
 export async function getProgramByToken(token: string): Promise<ProgramRow | null> {
   const { data, error } = await supabase.rpc("renter_get_program", { _token: token });
   if (error) throw error;
-  return (data as ProgramRow) ?? null;
+  return (data as unknown as ProgramRow) ?? null;
 }
 
 export async function startApplication(programToken: string): Promise<string> {
@@ -52,7 +52,7 @@ export async function startApplication(programToken: string): Promise<string> {
 export async function getApplication(sessionToken: string) {
   const { data, error } = await supabase.rpc("renter_get_application", { _token: sessionToken });
   if (error) throw error;
-  return data as { application: ApplicationRow; program: ProgramRow; documents: DocumentRow[] } | null;
+  return data as unknown as { application: ApplicationRow; program: ProgramRow; documents: DocumentRow[] } | null;
 }
 
 export async function updateApplicant(
@@ -62,7 +62,10 @@ export async function updateApplicant(
   lang: string,
 ) {
   const { error } = await supabase.rpc("renter_update_applicant", {
-    _token: token, _applicant: applicant, _co: co, _lang: lang,
+    _token: token,
+    _applicant: applicant as unknown as Record<string, unknown>,
+    _co: co as unknown as Record<string, unknown>[],
+    _lang: lang,
   });
   if (error) throw error;
 }
@@ -86,12 +89,12 @@ export async function saveDocument(input: SaveDocInput) {
     _requirement_id: input.requirementId,
     _doc_type: input.docType,
     _applicant_index: input.applicantIndex,
-    _storage_path: input.storagePath,
+    _storage_path: input.storagePath ?? "",
     _ocr_text: input.ocrText,
     _status: input.status,
-    _issues: input.issues,
+    _issues: input.issues as unknown as Record<string, unknown>[],
     _exif_flag: input.exifFlag,
-    _exif_reason: input.exifReason,
+    _exif_reason: input.exifReason ?? "",
   });
   if (error) throw error;
 }
