@@ -276,6 +276,7 @@ export type Database = {
         Args: { _applicant: Json; _co: Json; _lang: string; _token: string }
         Returns: undefined
       }
+      storage_path_token_is_valid: { Args: { _name: string }; Returns: boolean }
     }
     Enums: {
       app_role: "owner" | "member"
