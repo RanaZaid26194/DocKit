@@ -71,7 +71,7 @@ export type DictKey = keyof typeof EN;
 // missing keys fall back to English so the UI never shows raw keys.
 type PartialDict = Partial<Record<DictKey, string>>;
 
-const ES: Partial = {
+const ES: PartialDict = {
   "intro.title": "Prepare sus documentos de vivienda",
   "intro.body":
     "Esta es una lista que le ayuda a reunir los documentos correctos. No decidimos si usted califica; una persona real revisará todo lo que envíe.",
@@ -110,7 +110,7 @@ const ES: Partial = {
     "Esta herramienta revisa que sus documentos estén completos y vigentes. No decide quién califica para vivienda; una persona en la oficina de vivienda lo hace.",
 };
 
-const ZH: Partial = {
+const ZH: PartialDict = {
   "intro.title": "准备您的住房申请材料",
   "intro.body": "这是一份帮助您收集正确文件的清单。我们不决定您是否符合资格;将由真人审核您提交的所有内容。",
   "intro.privacy": "您的照片在发送前会在本手机上检查。您可以随时重新开始。",
@@ -130,7 +130,7 @@ const ZH: Partial = {
   "closed.startNew": "开始新的申请",
 };
 
-const VI: Partial = {
+const VI: PartialDict = {
   "intro.title": "Chuẩn bị hồ sơ nhà ở của bạn",
   "intro.start": "Bắt đầu",
   "intro.resume": "Tiếp tục",
@@ -145,7 +145,7 @@ const VI: Partial = {
   "closed.startNew": "Bắt đầu đơn mới",
 };
 
-const HT: Partial = {
+const HT: PartialDict = {
   "intro.title": "Prepare papye lojman ou yo",
   "intro.start": "Kòmanse",
   "intro.resume": "Kontinye",
@@ -160,7 +160,7 @@ const HT: Partial = {
   "closed.startNew": "Kòmanse yon nouvo aplikasyon",
 };
 
-const TL: Partial = {
+const TL: PartialDict = {
   "intro.title": "Ihanda ang inyong mga papeles para sa pabahay",
   "intro.start": "Magsimula",
   "intro.resume": "Ipagpatuloy",
@@ -175,7 +175,7 @@ const TL: Partial = {
   "closed.startNew": "Magsimula ng bagong aplikasyon",
 };
 
-const SO: Partial = {
+const SO: PartialDict = {
   "intro.title": "Diyaari waraaqahaaga guriga",
   "intro.start": "Bilow",
   "intro.resume": "Sii wad",
@@ -190,7 +190,7 @@ const SO: Partial = {
   "closed.startNew": "Bilow codsi cusub",
 };
 
-const AR: Partial = {
+const AR: PartialDict = {
   "intro.title": "جهّز أوراق السكن",
   "intro.start": "ابدأ",
   "intro.resume": "متابعة",
@@ -205,7 +205,7 @@ const AR: Partial = {
   "closed.startNew": "بدء طلب جديد",
 };
 
-export const DICT: Record<Lang, Partial & typeof EN> = {
+export const DICT: Record<Lang, PartialDict & typeof EN> = {
   en: EN,
   es: { ...EN, ...ES },
   zh: { ...EN, ...ZH },
