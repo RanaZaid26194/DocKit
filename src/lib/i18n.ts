@@ -205,7 +205,7 @@ const AR: PartialDict = {
   "closed.startNew": "بدء طلب جديد",
 };
 
-export const DICT: Record<Lang, PartialDict & typeof EN> = {
+export const DICT: Record<Lang, Record<DictKey, string>> = {
   en: EN,
   es: { ...EN, ...ES },
   zh: { ...EN, ...ZH },

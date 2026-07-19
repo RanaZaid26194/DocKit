@@ -11,6 +11,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "DocKit — complete housing paperwork, on the first try" },
       { property: "og:description", content: "Prevent one paperwork mistake from delaying an affordable-housing application for weeks." },
       { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: `${SITE_URL}/preview-image.png` },
+      { name: "twitter:image", content: `${SITE_URL}/preview-image.png` },
     ],
     links: [{ rel: "canonical", href: SITE_URL }],
     scripts: [{
