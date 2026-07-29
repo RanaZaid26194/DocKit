@@ -130,4 +130,12 @@
 @media print {
   .no-print { display: none !important; }
   body { background: white; color: black; }
+  header, footer, nav, aside { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  h1 { font-size: 22pt; margin-bottom: 8pt; }
+  h2 { font-size: 16pt; margin-top: 12pt; }
+  .rounded-lg, .border, .bg-card { border: 1pt solid #999 !important; background: white !important; box-shadow: none !important; }
+  a { color: black !important; text-decoration: none !important; }
+  ul li { break-inside: avoid; padding: 4pt 0; border-bottom: 0.5pt dotted #bbb; }
+  @page { margin: 0.6in; }
 }

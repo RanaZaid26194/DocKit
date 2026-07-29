@@ -106,7 +106,7 @@ function ProgramDetail() {
     toast.success(`Bundled ${added} packet(s).`);
   }
 
-  if (!prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!prog) return <Spinner label="Loading program" />;
 
   return (
     <div className="space-y-6">

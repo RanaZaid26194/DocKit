@@ -394,8 +394,8 @@ function DonePage({ app }: { app: ApplicationRow }) {
 
 function ClosedPage({ status, decidedAt, programToken }: { status: string; decidedAt: string | null; programToken: string | null }) {
   const messages: Record<string, { title: string; body: string; tone: string }> = {
-    approved: { title: "Application approved", body: "Your housing office marked this application approved. They'll contact you with next steps.", tone: "status-pass" },
-    rejected: { title: "Application closed", body: "This application has been closed by the housing office. Please contact them directly to discuss next steps.", tone: "status-fail" },
+    approved: { title: "Application approved", body: "Your housing office marked this application approved. They will contact you with next steps.", tone: "status-pass" },
+    rejected: { title: "Application closed", body: "This application has been closed by the housing office. Please contact them directly to discuss next steps or reapply.", tone: "status-fail" },
     withdrawn: { title: "Application withdrawn", body: "This application has been withdrawn. Contact the housing office if this was in error.", tone: "status-flag" },
   };
   const m = messages[status] ?? { title: "Application closed", body: "This application is no longer editable.", tone: "status-flag" };
