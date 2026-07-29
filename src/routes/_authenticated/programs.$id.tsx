@@ -219,17 +219,72 @@ function Requirements({ value, onChange }: { value: Requirement[]; onChange: (v:
               onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Checks: {r.rules.map((rr) => rr.kind).join(", ") || "none"}</p>
+          <SampleDocOcr onKeywords={(kws) => setDraft(draft.map((x, j) => j === i ? {
+            ...x,
+            rules: [
+              ...x.rules.filter((rr) => rr.kind !== "docTypeKeywords"),
+              { kind: "docTypeKeywords", keywords: kws },
+            ],
+          } : x))} />
           <button className="mt-2 inline-flex items-center gap-1 text-sm text-destructive" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>
             <Trash2 className="h-4 w-4" />Remove
           </button>
         </div>
       ))}
+      <p className="text-xs text-muted-foreground">Each requirement must have at least one keyword check — either add one manually or upload a sample so DocKit can suggest keywords.</p>
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => setDraft([...draft, { id: crypto.randomUUID(), name: "New requirement", description: "", perPerson: false, rules: [] }])}>
           <Plus className="mr-2 h-4 w-4" />Add requirement
         </Button>
         <Button onClick={() => onChange(draft)}>Save changes</Button>
       </div>
+    </div>
+  );
+}
+
+// Small helper: renter-side OCR run in the manager's browser. Extracts the
+// top-N distinctive tokens from a sample document and hands them back so the
+// manager can approve them as a `docTypeKeywords` check without hand-typing.
+const STOPWORDS = new Set([
+  "the","and","for","that","this","with","from","have","are","was","were",
+  "your","you","not","but","all","can","will","any","one","two","three",
+  "date","name","address","page","form","please","see","use","www","http",
+]);
+function SampleDocOcr({ onKeywords }: { onKeywords: (kws: string[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [suggested, setSuggested] = useState<string[]>([]);
+  async function analyze(file: File) {
+    setBusy(true);
+    try {
+      const text = await runOcr(file);
+      const counts: Record<string, number> = {};
+      for (const raw of text.toLowerCase().split(/[^a-z]+/)) {
+        if (raw.length < 4 || STOPWORDS.has(raw) || /\d/.test(raw)) continue;
+        counts[raw] = (counts[raw] ?? 0) + 1;
+      }
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
+      setSuggested(top);
+    } catch (e) {
+      toast.error("Couldn't read that sample: " + (e as Error).message);
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-input bg-background px-2 py-1 hover:bg-muted">
+          <Sparkles className="h-3 w-3" />
+          Suggest from sample
+          <input type="file" accept="image/*" className="sr-only"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) analyze(f); e.currentTarget.value = ""; }} />
+        </label>
+        {busy && <span className="text-muted-foreground">Reading sample…</span>}
+      </div>
+      {suggested.length > 0 && (
+        <div className="mt-2 space-y-1">
+          <p>Suggested keywords: {suggested.join(", ")}</p>
+          <button className="text-primary underline" onClick={() => onKeywords(suggested)}>Add these as a keyword check</button>
+        </div>
+      )}
     </div>
   );
 }
