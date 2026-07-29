@@ -9,23 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AAppTokenRouteImport } from './routes/a.$appToken'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as RTokenRouteImport } from './routes/r.$token'
-import { Route as AuthenticatedApplicationsIdRouteImport } from './routes/_authenticated/applications.$id'
+import { Route as AAppTokenRouteImport } from './routes/a.$appToken'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicPurgeStorageRouteImport } from './routes/api/public/purge-storage'
+import { Route as ApiPublicMailersendRouteImport } from './routes/api/public/mailersend'
 import { Route as AuthenticatedProgramsIdRouteImport } from './routes/_authenticated/programs.$id'
+import { Route as AuthenticatedApplicationsIdRouteImport } from './routes/_authenticated/applications.$id'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -33,19 +31,13 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AAppTokenRoute = AAppTokenRouteImport.update({
-  id: '/a/$appToken',
-  path: '/a/$appToken',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RTokenRoute = RTokenRouteImport.update({
@@ -53,17 +45,37 @@ const RTokenRoute = RTokenRouteImport.update({
   path: '/r/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AAppTokenRoute = AAppTokenRouteImport.update({
+  id: '/a/$appToken',
+  path: '/a/$appToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiPublicPurgeStorageRoute = ApiPublicPurgeStorageRouteImport.update({
+  id: '/api/public/purge-storage',
+  path: '/api/public/purge-storage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicMailersendRoute = ApiPublicMailersendRouteImport.update({
+  id: '/api/public/mailersend',
+  path: '/api/public/mailersend',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedProgramsIdRoute = AuthenticatedProgramsIdRouteImport.update({
+  id: '/programs/$id',
+  path: '/programs/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedApplicationsIdRoute =
   AuthenticatedApplicationsIdRouteImport.update({
     id: '/applications/$id',
     path: '/applications/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedProgramsIdRoute = AuthenticatedProgramsIdRouteImport.update({
-  id: '/programs/$id',
-  path: '/programs/$id',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -74,6 +86,8 @@ export interface FileRoutesByFullPath {
   '/r/$token': typeof RTokenRoute
   '/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,6 +98,8 @@ export interface FileRoutesByTo {
   '/r/$token': typeof RTokenRoute
   '/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,6 +112,8 @@ export interface FileRoutesById {
   '/r/$token': typeof RTokenRoute
   '/_authenticated/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/_authenticated/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,6 +126,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/applications/$id'
     | '/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,6 +138,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/applications/$id'
     | '/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   id:
     | '__root__'
     | '/'
@@ -129,6 +151,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/_authenticated/applications/$id'
     | '/_authenticated/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -138,22 +162,17 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AAppTokenRoute: typeof AAppTokenRoute
   RTokenRoute: typeof RTokenRoute
+  ApiPublicMailersendRoute: typeof ApiPublicMailersendRoute
+  ApiPublicPurgeStorageRoute: typeof ApiPublicPurgeStorageRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -163,25 +182,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/a/$appToken': {
-      id: '/a/$appToken'
-      path: '/a/$appToken'
-      fullPath: '/a/$appToken'
-      preLoaderRoute: typeof AAppTokenRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/r/$token': {
@@ -191,18 +203,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/applications/$id': {
-      id: '/_authenticated/applications/$id'
-      path: '/applications/$id'
-      fullPath: '/applications/$id'
-      preLoaderRoute: typeof AuthenticatedApplicationsIdRouteImport
+    '/a/$appToken': {
+      id: '/a/$appToken'
+      path: '/a/$appToken'
+      fullPath: '/a/$appToken'
+      preLoaderRoute: typeof AAppTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/purge-storage': {
+      id: '/api/public/purge-storage'
+      path: '/api/public/purge-storage'
+      fullPath: '/api/public/purge-storage'
+      preLoaderRoute: typeof ApiPublicPurgeStorageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mailersend': {
+      id: '/api/public/mailersend'
+      path: '/api/public/mailersend'
+      fullPath: '/api/public/mailersend'
+      preLoaderRoute: typeof ApiPublicMailersendRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/programs/$id': {
       id: '/_authenticated/programs/$id'
       path: '/programs/$id'
       fullPath: '/programs/$id'
       preLoaderRoute: typeof AuthenticatedProgramsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/applications/$id': {
+      id: '/_authenticated/applications/$id'
+      path: '/applications/$id'
+      fullPath: '/applications/$id'
+      preLoaderRoute: typeof AuthenticatedApplicationsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
@@ -230,6 +270,8 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AAppTokenRoute: AAppTokenRoute,
   RTokenRoute: RTokenRoute,
+  ApiPublicMailersendRoute: ApiPublicMailersendRoute,
+  ApiPublicPurgeStorageRoute: ApiPublicPurgeStorageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

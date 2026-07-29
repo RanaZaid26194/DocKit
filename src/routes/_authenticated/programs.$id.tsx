@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Copy, Trash2, Plus, Download } from "lucide-react";
+import JSZip from "jszip";
+import { Copy, Trash2, Plus, Download, Sparkles, Archive } from "lucide-react";
+import { runOcr } from "@/lib/ocr";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ProgramFull {
   id: string; name: string; program_type: string; link_token: string;
@@ -74,7 +77,36 @@ function ProgramDetail() {
     URL.revokeObjectURL(url);
   }
 
-  if (!prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  async function exportApprovedZip() {
+    if (!prog) return;
+    const approved = apps.filter((a) => a.status === "approved");
+    if (approved.length === 0) return toast.error("No approved applications to export.");
+    toast.info(`Bundling ${approved.length} packet(s)…`);
+    const { data: rows } = await supabase.from("applications")
+      .select("id, packet_path, applicant")
+      .eq("program_id", prog.id).eq("status", "approved");
+    const zip = new JSZip();
+    let added = 0;
+    for (const r of (rows ?? []) as { id: string; packet_path: string | null; applicant: { name?: string } }[]) {
+      if (!r.packet_path) continue;
+      const { data: signed } = await supabase.storage.from("documents").createSignedUrl(r.packet_path, 60 * 5);
+      if (!signed?.signedUrl) continue;
+      const res = await fetch(signed.signedUrl);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      const safe = (r.applicant?.name ?? r.id).replace(/[^a-z0-9-_]+/gi, "_").slice(0, 40);
+      zip.file(`${safe}-${r.id.slice(0, 8)}.pdf`, buf);
+      added += 1;
+    }
+    if (added === 0) return toast.error("No packet files are still available (retention window may have passed).");
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${prog.name}-approved-packets.zip`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Bundled ${added} packet(s).`);
+  }
+
+  if (!prog) return <Spinner label="Loading program" />;
 
   return (
     <div className="space-y-6">
@@ -118,9 +150,12 @@ function ProgramDetail() {
 
       {tab === "applications" && (
         <div>
-          <div className="mb-3 flex justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">{apps.length} application(s)</p>
-            <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportApprovedZip}><Archive className="mr-2 h-4 w-4" />Bulk ZIP (approved)</Button>
+              <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+            </div>
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border bg-card">
             {apps.map((a) => (
@@ -184,17 +219,72 @@ function Requirements({ value, onChange }: { value: Requirement[]; onChange: (v:
               onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Checks: {r.rules.map((rr) => rr.kind).join(", ") || "none"}</p>
+          <SampleDocOcr onKeywords={(kws) => setDraft(draft.map((x, j) => j === i ? {
+            ...x,
+            rules: [
+              ...x.rules.filter((rr) => rr.kind !== "docTypeKeywords"),
+              { kind: "docTypeKeywords", keywords: kws },
+            ],
+          } : x))} />
           <button className="mt-2 inline-flex items-center gap-1 text-sm text-destructive" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>
             <Trash2 className="h-4 w-4" />Remove
           </button>
         </div>
       ))}
+      <p className="text-xs text-muted-foreground">Each requirement must have at least one keyword check — either add one manually or upload a sample so DocKit can suggest keywords.</p>
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => setDraft([...draft, { id: crypto.randomUUID(), name: "New requirement", description: "", perPerson: false, rules: [] }])}>
           <Plus className="mr-2 h-4 w-4" />Add requirement
         </Button>
         <Button onClick={() => onChange(draft)}>Save changes</Button>
       </div>
+    </div>
+  );
+}
+
+// Small helper: renter-side OCR run in the manager's browser. Extracts the
+// top-N distinctive tokens from a sample document and hands them back so the
+// manager can approve them as a `docTypeKeywords` check without hand-typing.
+const STOPWORDS = new Set([
+  "the","and","for","that","this","with","from","have","are","was","were",
+  "your","you","not","but","all","can","will","any","one","two","three",
+  "date","name","address","page","form","please","see","use","www","http",
+]);
+function SampleDocOcr({ onKeywords }: { onKeywords: (kws: string[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [suggested, setSuggested] = useState<string[]>([]);
+  async function analyze(file: File) {
+    setBusy(true);
+    try {
+      const text = await runOcr(file);
+      const counts: Record<string, number> = {};
+      for (const raw of text.toLowerCase().split(/[^a-z]+/)) {
+        if (raw.length < 4 || STOPWORDS.has(raw) || /\d/.test(raw)) continue;
+        counts[raw] = (counts[raw] ?? 0) + 1;
+      }
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
+      setSuggested(top);
+    } catch (e) {
+      toast.error("Couldn't read that sample: " + (e as Error).message);
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-input bg-background px-2 py-1 hover:bg-muted">
+          <Sparkles className="h-3 w-3" />
+          Suggest from sample
+          <input type="file" accept="image/*" className="sr-only"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) analyze(f); e.currentTarget.value = ""; }} />
+        </label>
+        {busy && <span className="text-muted-foreground">Reading sample…</span>}
+      </div>
+      {suggested.length > 0 && (
+        <div className="mt-2 space-y-1">
+          <p>Suggested keywords: {suggested.join(", ")}</p>
+          <button className="text-primary underline" onClick={() => onKeywords(suggested)}>Add these as a keyword check</button>
+        </div>
+      )}
     </div>
   );
 }

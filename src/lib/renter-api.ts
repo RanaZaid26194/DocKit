@@ -128,3 +128,18 @@ export async function signedUrl(path: string): Promise<string | null> {
   const { data } = await supabase.storage.from("documents").createSignedUrl(path, 60 * 10);
   return data?.signedUrl ?? null;
 }
+
+/** Record an application snapshot (SHA-256 of the packet bytes) for audit. */
+export async function recordSnapshot(
+  token: string,
+  state: "submitted" | "approved" | "rejected" | "withdrawn",
+  bytes: Uint8Array,
+): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
+  const sha = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const { error } = await supabase.rpc("renter_record_snapshot", {
+    _token: token, _state: state, _sha: sha,
+  });
+  if (error) throw error;
+  return sha;
+}

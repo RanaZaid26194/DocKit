@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      application_snapshots: {
+        Row: {
+          application_id: string
+          id: string
+          packet_sha256: string
+          state: Database["public"]["Enums"]["application_status"]
+          taken_at: string
+        }
+        Insert: {
+          application_id: string
+          id?: string
+          packet_sha256: string
+          state: Database["public"]["Enums"]["application_status"]
+          taken_at?: string
+        }
+        Update: {
+          application_id?: string
+          id?: string
+          packet_sha256?: string
+          state?: Database["public"]["Enums"]["application_status"]
+          taken_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_snapshots_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       applications: {
         Row: {
           applicant: Json
@@ -25,6 +57,7 @@ export type Database = {
           last_activity_at: string
           manager_note: string | null
           packet_path: string | null
+          pre_marked_requirements: string[]
           program_id: string
           session_token: string
           status: Database["public"]["Enums"]["application_status"]
@@ -40,6 +73,7 @@ export type Database = {
           last_activity_at?: string
           manager_note?: string | null
           packet_path?: string | null
+          pre_marked_requirements?: string[]
           program_id: string
           session_token?: string
           status?: Database["public"]["Enums"]["application_status"]
@@ -55,6 +89,7 @@ export type Database = {
           last_activity_at?: string
           manager_note?: string | null
           packet_path?: string | null
+          pre_marked_requirements?: string[]
           program_id?: string
           session_token?: string
           status?: Database["public"]["Enums"]["application_status"]
@@ -254,6 +289,14 @@ export type Database = {
       }
       renter_get_application: { Args: { _token: string }; Returns: Json }
       renter_get_program: { Args: { _token: string }; Returns: Json }
+      renter_record_snapshot: {
+        Args: {
+          _sha: string
+          _state: Database["public"]["Enums"]["application_status"]
+          _token: string
+        }
+        Returns: undefined
+      }
       renter_save_document: {
         Args: {
           _applicant_index: number
