@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Copy, Trash2, Plus, Download } from "lucide-react";
+import JSZip from "jszip";
+import { Copy, Trash2, Plus, Download, Sparkles, Archive } from "lucide-react";
+import { runOcr } from "@/lib/ocr";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ProgramFull {
   id: string; name: string; program_type: string; link_token: string;
@@ -74,6 +77,35 @@ function ProgramDetail() {
     URL.revokeObjectURL(url);
   }
 
+  async function exportApprovedZip() {
+    if (!prog) return;
+    const approved = apps.filter((a) => a.status === "approved");
+    if (approved.length === 0) return toast.error("No approved applications to export.");
+    toast.info(`Bundling ${approved.length} packet(s)…`);
+    const { data: rows } = await supabase.from("applications")
+      .select("id, packet_path, applicant")
+      .eq("program_id", prog.id).eq("status", "approved");
+    const zip = new JSZip();
+    let added = 0;
+    for (const r of (rows ?? []) as { id: string; packet_path: string | null; applicant: { name?: string } }[]) {
+      if (!r.packet_path) continue;
+      const { data: signed } = await supabase.storage.from("documents").createSignedUrl(r.packet_path, 60 * 5);
+      if (!signed?.signedUrl) continue;
+      const res = await fetch(signed.signedUrl);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      const safe = (r.applicant?.name ?? r.id).replace(/[^a-z0-9-_]+/gi, "_").slice(0, 40);
+      zip.file(`${safe}-${r.id.slice(0, 8)}.pdf`, buf);
+      added += 1;
+    }
+    if (added === 0) return toast.error("No packet files are still available (retention window may have passed).");
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${prog.name}-approved-packets.zip`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Bundled ${added} packet(s).`);
+  }
+
   if (!prog) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
@@ -118,9 +150,12 @@ function ProgramDetail() {
 
       {tab === "applications" && (
         <div>
-          <div className="mb-3 flex justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">{apps.length} application(s)</p>
-            <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportApprovedZip}><Archive className="mr-2 h-4 w-4" />Bulk ZIP (approved)</Button>
+              <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+            </div>
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border bg-card">
             {apps.map((a) => (
