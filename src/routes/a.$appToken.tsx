@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   getApplication, updateApplicant, saveDocument, startOver, uploadDoc, submitApplication,
+  recordSnapshot,
   type ApplicationRow, type ProgramRow, type DocumentRow, type Applicant,
 } from "@/lib/renter-api";
 import { runRules, type Requirement } from "@/lib/rules/engine";
@@ -11,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useLang, useT, type Lang } from "@/lib/i18n";
+import { useLang, useT, LANG_LABELS, type Lang } from "@/lib/i18n";
 import logo from "/logo.png?url";
 import { toast } from "sonner";
 import {
@@ -26,7 +27,7 @@ const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
 const PDF_MIME = "application/pdf";
 const CLOSED = new Set(["approved", "rejected", "withdrawn"]);
 
-interface AppExtra extends ApplicationRow { manager_note?: string | null; decided_at?: string | null }
+interface AppExtra extends ApplicationRow { manager_note?: string | null; decided_at?: string | null; pre_marked_requirements?: string[] }
 
 export const Route = createFileRoute("/a/$appToken")({
   head: () => ({ meta: [{ title: "Your application — DocKit" }, { name: "robots", content: "noindex, nofollow" }] }),
@@ -72,7 +73,7 @@ function RenterApp() {
       <header className="no-print sticky top-0 z-10 border-b border-border bg-background">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="DocKit logo" width={24} height={24} />
+            <img src={logo} alt="DocKit logo" width={32} height={32} className="h-8 w-8" />
             <span className="font-semibold">DocKit</span>
           </div>
           <div className="flex items-center gap-3">
@@ -88,8 +89,9 @@ function RenterApp() {
               className="rounded-md border border-input bg-background px-2 py-1 text-sm"
               aria-label="Language"
             >
-              <option value="en">English</option>
-              <option value="es">Español</option>
+              {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
+                <option key={l} value={l}>{LANG_LABELS[l]}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -125,6 +127,7 @@ function RenterApp() {
           .upload(path, new Blob([new Uint8Array(bytes)], { type: "application/pdf" }));
         if (error) { toast.error(error.message); return; }
         await submitApplication(appToken, path);
+        try { await recordSnapshot(appToken, "submitted", bytes); } catch { /* audit optional */ }
         const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "application/pdf" }));
         const a = document.createElement("a"); a.href = url; a.download = "housing-packet.pdf"; a.click();
         URL.revokeObjectURL(url);
@@ -244,8 +247,10 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
     await onDocProcessed();
   }
 
+  const preMarked = new Set(app.pre_marked_requirements ?? []);
   const slots: { req: Requirement; applicantIndex: number }[] = [];
   for (const req of program.requirements) {
+    if (preMarked.has(req.id)) continue;
     if (req.perPerson) people.forEach((_p, i) => slots.push({ req, applicantIndex: i }));
     else slots.push({ req, applicantIndex: 0 });
   }
@@ -262,10 +267,15 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
           <p className="mt-1 whitespace-pre-wrap">{app.manager_note}</p>
         </div>
       )}
+      {preMarked.size > 0 && (
+        <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          Your caseworker already has {preMarked.size} document(s) on file, so you don't need to upload them here.
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{t("checklist.title")}</h1>
-          <p className="text-sm text-muted-foreground">{done} / {slots.length}</p>
+          <p className="text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">{done} / {slots.length}</p>
         </div>
         <div className="flex gap-2 no-print">
           <Button variant="outline" size="sm" onClick={togglePrintable}><Printer className="mr-1 h-4 w-4" />{t("checklist.printable")}</Button>

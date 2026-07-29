@@ -16,6 +16,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RTokenRouteImport } from './routes/r.$token'
 import { Route as AAppTokenRouteImport } from './routes/a.$appToken'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicPurgeStorageRouteImport } from './routes/api/public/purge-storage'
+import { Route as ApiPublicMailersendRouteImport } from './routes/api/public/mailersend'
 import { Route as AuthenticatedProgramsIdRouteImport } from './routes/_authenticated/programs.$id'
 import { Route as AuthenticatedApplicationsIdRouteImport } from './routes/_authenticated/applications.$id'
 
@@ -53,6 +55,16 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicPurgeStorageRoute = ApiPublicPurgeStorageRouteImport.update({
+  id: '/api/public/purge-storage',
+  path: '/api/public/purge-storage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicMailersendRoute = ApiPublicMailersendRouteImport.update({
+  id: '/api/public/mailersend',
+  path: '/api/public/mailersend',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedProgramsIdRoute = AuthenticatedProgramsIdRouteImport.update({
   id: '/programs/$id',
   path: '/programs/$id',
@@ -74,6 +86,8 @@ export interface FileRoutesByFullPath {
   '/r/$token': typeof RTokenRoute
   '/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,6 +98,8 @@ export interface FileRoutesByTo {
   '/r/$token': typeof RTokenRoute
   '/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,6 +112,8 @@ export interface FileRoutesById {
   '/r/$token': typeof RTokenRoute
   '/_authenticated/applications/$id': typeof AuthenticatedApplicationsIdRoute
   '/_authenticated/programs/$id': typeof AuthenticatedProgramsIdRoute
+  '/api/public/mailersend': typeof ApiPublicMailersendRoute
+  '/api/public/purge-storage': typeof ApiPublicPurgeStorageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,6 +126,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/applications/$id'
     | '/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,6 +138,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/applications/$id'
     | '/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   id:
     | '__root__'
     | '/'
@@ -129,6 +151,8 @@ export interface FileRouteTypes {
     | '/r/$token'
     | '/_authenticated/applications/$id'
     | '/_authenticated/programs/$id'
+    | '/api/public/mailersend'
+    | '/api/public/purge-storage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -138,6 +162,8 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AAppTokenRoute: typeof AAppTokenRoute
   RTokenRoute: typeof RTokenRoute
+  ApiPublicMailersendRoute: typeof ApiPublicMailersendRoute
+  ApiPublicPurgeStorageRoute: typeof ApiPublicPurgeStorageRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -191,6 +217,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/purge-storage': {
+      id: '/api/public/purge-storage'
+      path: '/api/public/purge-storage'
+      fullPath: '/api/public/purge-storage'
+      preLoaderRoute: typeof ApiPublicPurgeStorageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mailersend': {
+      id: '/api/public/mailersend'
+      path: '/api/public/mailersend'
+      fullPath: '/api/public/mailersend'
+      preLoaderRoute: typeof ApiPublicMailersendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/programs/$id': {
       id: '/_authenticated/programs/$id'
       path: '/programs/$id'
@@ -230,6 +270,8 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AAppTokenRoute: AAppTokenRoute,
   RTokenRoute: RTokenRoute,
+  ApiPublicMailersendRoute: ApiPublicMailersendRoute,
+  ApiPublicPurgeStorageRoute: ApiPublicPurgeStorageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
