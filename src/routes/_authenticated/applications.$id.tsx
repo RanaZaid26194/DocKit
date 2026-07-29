@@ -75,6 +75,21 @@ function ReviewPage() {
   async function decide(newStatus: "approved" | "rejected" | "withdrawn") {
     const label = newStatus === "approved" ? "approved" : newStatus === "rejected" ? "not approved" : "withdrawn";
     if (!confirm(`Mark this application ${label}? Uploaded images will be deleted.`)) return;
+    // Capture a signed hash of the packet BEFORE the storage object is removed.
+    if (app?.packet_path) {
+      try {
+        const url = await signedUrl(app.packet_path);
+        if (url) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            const digest = await crypto.subtle.digest("SHA-256", buf as unknown as ArrayBuffer);
+            const sha = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+            await supabase.from("application_snapshots").insert({ application_id: id, state: newStatus, packet_sha256: sha } as never);
+          }
+        }
+      } catch { /* snapshot is best-effort */ }
+    }
     const { data, error } = await supabase.rpc("manager_decide_application", { _app_id: id, _new_status: newStatus });
     if (error) return toast.error(error.message);
     const paths = (data as string[] | null) ?? [];
@@ -164,7 +179,7 @@ function ReviewPage() {
       {/* Desktop: side-by-side. Mobile: stacked. */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         {/* Document list */}
-        <aside className="space-y-2">
+        <aside className="space-y-2 lg:sticky lg:top-4 lg:self-start">
           <div className="rounded-lg border border-border bg-card p-3">
             <p className="text-sm font-semibold">Documents ({slots.length})</p>
           </div>
