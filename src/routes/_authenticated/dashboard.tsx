@@ -48,7 +48,7 @@ function Dashboard() {
     const { error } = await supabase.from("programs").insert({
       owner_id: userRes.user.id,
       name: name || req.label,
-      program_type: preset === "scratch" ? "custom" : preset,
+      program_type: preset === "section8" || preset === "lihtc" || preset === "public_housing" ? preset : "custom",
       requirements: req.requirements as never,
     });
     if (error) return toast.error(error.message);
