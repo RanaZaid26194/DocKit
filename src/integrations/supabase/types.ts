@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      application_messages: {
+        Row: {
+          application_id: string
+          author_name: string
+          author_role: string
+          body: string
+          created_at: string
+          document_id: string | null
+          id: string
+        }
+        Insert: {
+          application_id: string
+          author_name?: string
+          author_role: string
+          body: string
+          created_at?: string
+          document_id?: string | null
+          id?: string
+        }
+        Update: {
+          application_id?: string
+          author_name?: string
+          author_role?: string
+          body?: string
+          created_at?: string
+          document_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_messages_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_messages_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       application_snapshots: {
         Row: {
           application_id: string
@@ -191,6 +236,7 @@ export type Database = {
       programs: {
         Row: {
           created_at: string
+          default_pre_marked: string[]
           id: string
           link_token: string
           name: string
@@ -202,6 +248,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_pre_marked?: string[]
           id?: string
           link_token?: string
           name: string
@@ -213,6 +260,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_pre_marked?: string[]
           id?: string
           link_token?: string
           name?: string
@@ -289,6 +337,11 @@ export type Database = {
       }
       renter_get_application: { Args: { _token: string }; Returns: Json }
       renter_get_program: { Args: { _token: string }; Returns: Json }
+      renter_list_messages: { Args: { _token: string }; Returns: Json }
+      renter_post_message: {
+        Args: { _body: string; _document_id?: string; _token: string }
+        Returns: string
+      }
       renter_record_snapshot: {
         Args: {
           _sha: string
