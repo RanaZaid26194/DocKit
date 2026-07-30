@@ -42,7 +42,7 @@ function ProgramDetail() {
 
   const load = useCallback(async () => {
     const { data: p, error } = await supabase.from("programs").select("*").eq("id", id).single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setProg((p as unknown) as ProgramFull);
     const { data: a } = await supabase.from("applications").select("id,status,applicant,last_activity_at,submitted_at").eq("program_id", id).order("last_activity_at", { ascending: false });
     setApps((a ?? []) as AppRow[]);
@@ -86,7 +86,7 @@ function ProgramDetail() {
 
   async function zipPackets(ids: string[], filename: string) {
     if (!prog) return;
-    if (ids.length === 0) return toast.error("Nothing selected to export.");
+    if (ids.length === 0) { toast.error("Nothing selected to export."); return; }
     toast.info(`Bundling ${ids.length} packet(s)…`);
     const { data: rows } = await supabase.from("applications")
       .select("id, packet_path, applicant")
@@ -104,7 +104,7 @@ function ProgramDetail() {
       zip.file(`${safe}-${r.id.slice(0, 8)}.pdf`, buf);
       added += 1;
     }
-    if (added === 0) return toast.error("No packet files are still available (retention window may have passed).");
+    if (added === 0) { toast.error("No packet files are still available (retention window may have passed)."); return; }
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
