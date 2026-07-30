@@ -33,13 +33,13 @@ function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <a href="/" className="flex items-center gap-2">
+          <a href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <img src={logo} alt="DocKit logo" width={32} height={32} />
             <span className="text-lg font-semibold">DocKit</span>
           </a>
           <nav className="flex items-center gap-2 text-sm">
-            <Link to="/auth" search={{ mode: "signin" }} className="rounded-md px-3 py-2 hover:bg-muted">Sign in</Link>
-            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground">Create free account</Link>
+            <Link to="/auth" search={{ mode: "signin" }} className="rounded-md px-3 py-2 transition-colors hover:bg-muted hover:text-foreground">Sign in</Link>
+            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md">Create free account</Link>
           </nav>
         </div>
       </header>
@@ -55,10 +55,10 @@ function Landing() {
             Your team still makes every eligibility decision.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-6 py-3 text-base font-medium text-primary-foreground">
+            <Link to="/auth" search={{ mode: "signup" }} className="rounded-md bg-primary px-6 py-3 text-base font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-lg">
               Create a housing office account
             </Link>
-            <a href="#how" className="rounded-md border border-input px-6 py-3 text-base font-medium">See how it works</a>
+            <a href="#how" className="rounded-md border border-input px-6 py-3 text-base font-medium transition-colors hover:bg-accent hover:text-accent-foreground">See how it works</a>
           </div>
         </section>
 
@@ -69,7 +69,7 @@ function Landing() {
               { h: "Renters upload on their phone", p: "Text reading and metadata checks run on the renter's device. Nothing gets sent to any AI service." },
               { h: "You review a clean packet", p: "You see per-document pass, fix, or flag notes — and you make the call." },
             ].map((c) => (
-              <article key={c.h} className="rounded-lg border border-border bg-card p-5">
+              <article key={c.h} className="rounded-lg border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <h2 className="text-lg font-semibold">{c.h}</h2>
                 <p className="mt-2 text-sm text-muted-foreground">{c.p}</p>
               </article>
