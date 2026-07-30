@@ -8,17 +8,25 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import JSZip from "jszip";
-import { Copy, Trash2, Plus, Download, Sparkles, Archive } from "lucide-react";
-import { runOcr } from "@/lib/ocr";
+import { Copy, Plus, Download, Archive, LayoutTemplate, CheckSquare } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { RequirementCard } from "@/components/RequirementEditor";
+import { PRESETS, TEMPLATE_DIRECTORY, PRESET_DISCLAIMER } from "@/lib/presets";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ProgramFull {
   id: string; name: string; program_type: string; link_token: string;
   requirements: Requirement[]; owner_id: string; retention_days: number | null;
+  default_pre_marked: string[] | null;
 }
 interface AppRow {
   id: string; status: string; applicant: { name?: string }; last_activity_at: string; submitted_at: string | null;
 }
+
+const OPEN_STATUSES = new Set(["in_progress", "submitted"]);
 
 export const Route = createFileRoute("/_authenticated/programs/$id")({
   head: () => ({ meta: [{ title: "Program — DocKit" }, { name: "robots", content: "noindex" }] }),
@@ -34,14 +42,13 @@ function ProgramDetail() {
 
   const load = useCallback(async () => {
     const { data: p, error } = await supabase.from("programs").select("*").eq("id", id).single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setProg((p as unknown) as ProgramFull);
     const { data: a } = await supabase.from("applications").select("id,status,applicant,last_activity_at,submitted_at").eq("program_id", id).order("last_activity_at", { ascending: false });
     setApps((a ?? []) as AppRow[]);
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: refresh applications when they change.
   useEffect(() => {
     const channel = supabase
       .channel(`program-${id}-apps`)
@@ -77,14 +84,13 @@ function ProgramDetail() {
     URL.revokeObjectURL(url);
   }
 
-  async function exportApprovedZip() {
+  async function zipPackets(ids: string[], filename: string) {
     if (!prog) return;
-    const approved = apps.filter((a) => a.status === "approved");
-    if (approved.length === 0) return toast.error("No approved applications to export.");
-    toast.info(`Bundling ${approved.length} packet(s)…`);
+    if (ids.length === 0) { toast.error("Nothing selected to export."); return; }
+    toast.info(`Bundling ${ids.length} packet(s)…`);
     const { data: rows } = await supabase.from("applications")
       .select("id, packet_path, applicant")
-      .eq("program_id", prog.id).eq("status", "approved");
+      .in("id", ids);
     const zip = new JSZip();
     let added = 0;
     for (const r of (rows ?? []) as { id: string; packet_path: string | null; applicant: { name?: string } }[]) {
@@ -98,10 +104,10 @@ function ProgramDetail() {
       zip.file(`${safe}-${r.id.slice(0, 8)}.pdf`, buf);
       added += 1;
     }
-    if (added === 0) return toast.error("No packet files are still available (retention window may have passed).");
+    if (added === 0) { toast.error("No packet files are still available (retention window may have passed)."); return; }
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `${prog.name}-approved-packets.zip`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
     toast.success(`Bundled ${added} packet(s).`);
   }
@@ -111,20 +117,20 @@ function ProgramDetail() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/dashboard" className="text-sm text-muted-foreground hover:underline">← All programs</Link>
+        <Link to="/dashboard" className="text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline">← All programs</Link>
         <h1 className="mt-2 text-2xl font-semibold">{prog.name}</h1>
         <p className="text-sm text-muted-foreground">{prog.program_type}</p>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-border">
+      <div className="flex flex-wrap gap-1 border-b border-border" role="tablist">
         {(["share","requirements","applications","team","analytics","settings"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm capitalize ${tab === t ? "border-b-2 border-primary font-medium" : "text-muted-foreground"}`}>{t}</button>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
+            className={`rounded-t-md px-3 py-2 text-sm capitalize transition-colors ${tab === t ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>{t}</button>
         ))}
       </div>
 
       {tab === "share" && (
-        <div className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6">
+        <div className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="text-center">
             <h2 className="text-lg font-semibold">Share this program with renters</h2>
             <p className="mt-1 text-sm text-muted-foreground">Anyone with the link can start an application. The link is unguessable.</p>
@@ -132,14 +138,14 @@ function ProgramDetail() {
           {qr && (
             <div className="mt-6 flex flex-col items-center gap-3">
               <img src={qr} alt="QR code for renter link" width={240} height={240} className="rounded-md border border-border" />
-              <a href={qr} download={`${prog.name}-qr.png`} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+              <a href={qr} download={`${prog.name}-qr.png`} className="inline-flex items-center gap-1 text-sm text-primary transition-colors hover:underline">
                 <Download className="h-4 w-4" />Download QR PNG
               </a>
             </div>
           )}
           <div className="mt-6 flex gap-2">
             <Input readOnly value={shareUrl} aria-label="Renter share link" />
-            <Button variant="outline" onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success("Copied."); }}>
+            <Button variant="outline" aria-label="Copy renter link" onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success("Copied."); }}>
               <Copy className="h-4 w-4" />
             </Button>
           </div>
@@ -149,31 +155,7 @@ function ProgramDetail() {
       {tab === "requirements" && <Requirements value={prog.requirements ?? []} onChange={saveRequirements} />}
 
       {tab === "applications" && (
-        <div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">{apps.length} application(s)</p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={exportApprovedZip}><Archive className="mr-2 h-4 w-4" />Bulk ZIP (approved)</Button>
-              <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
-            </div>
-          </div>
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-            {apps.map((a) => (
-              <li key={a.id} className="flex items-center justify-between p-4">
-                <div>
-                  <Link to="/applications/$id" params={{ id: a.id }} className="font-medium hover:underline">
-                    {a.applicant?.name || "(no name yet)"}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    <StatusText s={a.status} /> · last active {new Date(a.last_activity_at).toLocaleString()}
-                  </p>
-                </div>
-                <Link to="/applications/$id" params={{ id: a.id }} className="text-sm text-primary">Review →</Link>
-              </li>
-            ))}
-            {apps.length === 0 && <li className="p-4 text-sm text-muted-foreground">No applications yet.</li>}
-          </ul>
-        </div>
+        <ApplicationsTab apps={apps} onExportCsv={exportCsv} onZip={zipPackets} onChanged={load} programName={prog.name} />
       )}
 
       {tab === "team" && <TeamTab programId={prog.id} />}
@@ -194,100 +176,189 @@ function StatusText({ s }: { s: string }) {
   return <span>{labels[s] ?? s}</span>;
 }
 
+/* ------------------------------------------------------- requirements tab */
+
 function Requirements({ value, onChange }: { value: Requirement[]; onChange: (v: Requirement[]) => void }) {
   const [draft, setDraft] = useState<Requirement[]>(value);
+  const [showTemplates, setShowTemplates] = useState(false);
   useEffect(() => setDraft(value), [value]);
+
+  function addTemplate(key: (typeof TEMPLATE_DIRECTORY)[number]["key"]) {
+    const incoming = PRESETS[key].requirements.filter((r) => !draft.some((d) => d.id === r.id || d.name === r.name));
+    if (incoming.length === 0) return toast.info("Every requirement from that template is already here.");
+    setDraft([...draft, ...incoming.map((r) => ({ ...r }))]);
+    toast.success(`Added ${incoming.length} requirement(s). Review and save.`);
+  }
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(value);
+
   return (
     <div className="space-y-3">
-      {draft.map((r, i) => (
-        <div key={r.id} className="rounded-lg border border-border bg-card p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label>Name</Label>
-              <Input value={r.name} onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-            </div>
-            <div className="flex items-center gap-2 pt-6 text-sm">
-              <input id={`pp-${i}`} type="checkbox" checked={r.perPerson}
-                onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, perPerson: e.target.checked } : x))} />
-              <label htmlFor={`pp-${i}`}>Required per person</label>
-            </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">{draft.length} requirement(s)</p>
+        <Button variant="outline" size="sm" onClick={() => setShowTemplates((v) => !v)}>
+          <LayoutTemplate className="mr-1 h-4 w-4" />Starter templates
+        </Button>
+      </div>
+
+      {showTemplates && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-sm font-medium">Fork a starter template</p>
+          <p className="mt-1 text-xs text-muted-foreground">{PRESET_DISCLAIMER}</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {TEMPLATE_DIRECTORY.map((t) => (
+              <div key={t.key} className="rounded-md border border-border p-3 transition-shadow hover:shadow-md">
+                <p className="text-sm font-medium">{t.label}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t.blurb}</p>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => addTemplate(t.key)}>
+                  <Plus className="mr-1 h-3 w-3" />Add {t.count} requirement(s)
+                </Button>
+              </div>
+            ))}
           </div>
-          <div className="mt-2">
-            <Label>Description for renters</Label>
-            <textarea className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" rows={2}
-              value={r.description}
-              onChange={(e) => setDraft(draft.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">Checks: {r.rules.map((rr) => rr.kind).join(", ") || "none"}</p>
-          <SampleDocOcr onKeywords={(kws) => setDraft(draft.map((x, j) => j === i ? {
-            ...x,
-            rules: [
-              ...x.rules.filter((rr) => rr.kind !== "docTypeKeywords"),
-              { kind: "docTypeKeywords", keywords: kws },
-            ],
-          } : x))} />
-          <button className="mt-2 inline-flex items-center gap-1 text-sm text-destructive" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>
-            <Trash2 className="h-4 w-4" />Remove
-          </button>
         </div>
+      )}
+
+      {draft.map((r, i) => (
+        <RequirementCard
+          key={r.id}
+          value={r}
+          onChange={(nr) => setDraft(draft.map((x, j) => (j === i ? nr : x)))}
+          onRemove={() => setDraft(draft.filter((_, j) => j !== i))}
+        />
       ))}
-      <p className="text-xs text-muted-foreground">Each requirement must have at least one keyword check — either add one manually or upload a sample so DocKit can suggest keywords.</p>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setDraft([...draft, { id: crypto.randomUUID(), name: "New requirement", description: "", perPerson: false, rules: [] }])}>
+
+      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-background/95 py-3 backdrop-blur">
+        <Button variant="outline" onClick={() => setDraft([...draft, {
+          id: crypto.randomUUID(), name: "New requirement", description: "", perPerson: false,
+          rules: [{ kind: "docTypeKeywords", keywords: [] }],
+        }])}>
           <Plus className="mr-2 h-4 w-4" />Add requirement
         </Button>
-        <Button onClick={() => onChange(draft)}>Save changes</Button>
+        <Button onClick={() => onChange(draft)} disabled={!dirty}>{dirty ? "Save changes" : "Saved"}</Button>
       </div>
     </div>
   );
 }
 
-// Small helper: renter-side OCR run in the manager's browser. Extracts the
-// top-N distinctive tokens from a sample document and hands them back so the
-// manager can approve them as a `docTypeKeywords` check without hand-typing.
-const STOPWORDS = new Set([
-  "the","and","for","that","this","with","from","have","are","was","were",
-  "your","you","not","but","all","can","will","any","one","two","three",
-  "date","name","address","page","form","please","see","use","www","http",
-]);
-function SampleDocOcr({ onKeywords }: { onKeywords: (kws: string[]) => void }) {
+/* ------------------------------------------------------- applications tab */
+
+function ApplicationsTab({
+  apps, onExportCsv, onZip, onChanged, programName,
+}: {
+  apps: AppRow[];
+  onExportCsv: () => void;
+  onZip: (ids: string[], filename: string) => Promise<void>;
+  onChanged: () => Promise<void>;
+  programName: string;
+}) {
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [pending, setPending] = useState<null | "approved" | "withdrawn" | "rejected">(null);
   const [busy, setBusy] = useState(false);
-  const [suggested, setSuggested] = useState<string[]>([]);
-  async function analyze(file: File) {
+
+  const selected = apps.filter((a) => sel.has(a.id));
+  const toggle = (id: string) =>
+    setSel((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allChecked = apps.length > 0 && sel.size === apps.length;
+
+  const eligible = selected.filter((a) => OPEN_STATUSES.has(a.status));
+
+  async function runBulk(status: "approved" | "withdrawn" | "rejected") {
     setBusy(true);
-    try {
-      const text = await runOcr(file);
-      const counts: Record<string, number> = {};
-      for (const raw of text.toLowerCase().split(/[^a-z]+/)) {
-        if (raw.length < 4 || STOPWORDS.has(raw) || /\d/.test(raw)) continue;
-        counts[raw] = (counts[raw] ?? 0) + 1;
-      }
-      const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
-      setSuggested(top);
-    } catch (e) {
-      toast.error("Couldn't read that sample: " + (e as Error).message);
-    } finally { setBusy(false); }
+    let ok = 0;
+    for (const a of eligible) {
+      const { data, error } = await supabase.rpc("manager_decide_application", { _app_id: a.id, _new_status: status });
+      if (error) continue;
+      const paths = (data as string[] | null) ?? [];
+      if (paths.length) await supabase.storage.from("documents").remove(paths);
+      ok += 1;
+    }
+    setBusy(false);
+    setPending(null);
+    setSel(new Set());
+    await onChanged();
+    toast.success(`Updated ${ok} application(s). Their uploaded images were deleted.`);
   }
+
   return (
-    <div className="mt-3 rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-input bg-background px-2 py-1 hover:bg-muted">
-          <Sparkles className="h-3 w-3" />
-          Suggest from sample
-          <input type="file" accept="image/*" className="sr-only"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) analyze(f); e.currentTarget.value = ""; }} />
-        </label>
-        {busy && <span className="text-muted-foreground">Reading sample…</span>}
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">{apps.length} application(s){sel.size > 0 ? ` · ${sel.size} selected` : ""}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => onZip(apps.filter((a) => a.status === "approved").map((a) => a.id), `${programName}-approved-packets.zip`)}>
+            <Archive className="mr-2 h-4 w-4" />Bulk ZIP (approved)
+          </Button>
+          <Button variant="outline" onClick={onExportCsv}><Download className="mr-2 h-4 w-4" />Export CSV</Button>
+        </div>
       </div>
-      {suggested.length > 0 && (
-        <div className="mt-2 space-y-1">
-          <p>Suggested keywords: {suggested.join(", ")}</p>
-          <button className="text-primary underline" onClick={() => onKeywords(suggested)}>Add these as a keyword check</button>
+
+      {sel.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-accent p-3">
+          <CheckSquare className="h-4 w-4" />
+          <span className="text-sm font-medium">{sel.size} selected</span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setPending("approved")} disabled={!eligible.length}>Approve</Button>
+            <Button size="sm" variant="outline" onClick={() => setPending("rejected")} disabled={!eligible.length}>Not approve</Button>
+            <Button size="sm" variant="outline" onClick={() => setPending("withdrawn")} disabled={!eligible.length}>Withdraw</Button>
+            <Button size="sm" variant="outline" onClick={() => onZip([...sel], `${programName}-selected-packets.zip`)}>Export ZIP</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Clear</Button>
+          </div>
         </div>
       )}
+
+      <div className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground">
+        <input id="sel-all" type="checkbox" className="h-4 w-4 min-h-0" checked={allChecked}
+          onChange={(e) => setSel(e.target.checked ? new Set(apps.map((a) => a.id)) : new Set())} />
+        <label htmlFor="sel-all">Select all</label>
+      </div>
+
+      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+        {apps.map((a) => (
+          <li key={a.id} className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50">
+            <input type="checkbox" className="h-4 w-4 min-h-0" checked={sel.has(a.id)}
+              onChange={() => toggle(a.id)} aria-label={`Select ${a.applicant?.name || "application"}`} />
+            <div className="min-w-0 flex-1">
+              <Link to="/applications/$id" params={{ id: a.id }} className="font-medium transition-colors hover:text-primary hover:underline">
+                {a.applicant?.name || "(no name yet)"}
+              </Link>
+              <p className="text-xs text-muted-foreground">
+                <StatusText s={a.status} /> · last active {new Date(a.last_activity_at).toLocaleString()}
+              </p>
+            </div>
+            <Link to="/applications/$id" params={{ id: a.id }} className="text-sm text-primary transition-colors hover:underline">Review →</Link>
+          </li>
+        ))}
+        {apps.length === 0 && <li className="p-4 text-sm text-muted-foreground">No applications yet.</li>}
+      </ul>
+
+      <AlertDialog open={pending !== null} onOpenChange={(o) => !o && setPending(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pending === "approved" ? "Approve" : pending === "rejected" ? "Mark not approved" : "Withdraw"} {eligible.length} application(s)?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p>This records a decision for each of the following and permanently deletes their uploaded images. Closed applications in your selection are skipped.</p>
+                <ul className="mt-2 max-h-40 list-disc space-y-0.5 overflow-auto pl-5 text-sm">
+                  {eligible.map((a) => <li key={a.id}>{a.applicant?.name || a.id.slice(0, 8)}</li>)}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); if (pending) runBulk(pending); }}>
+              {busy ? "Working…" : "Yes, apply to all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+/* -------------------------------------------------------------- team tab */
 
 function TeamTab({ programId }: { programId: string }) {
   const [members, setMembers] = useState<{ id: string; invited_email: string; role: string; user_id: string | null }[]>([]);
@@ -302,6 +373,9 @@ function TeamTab({ programId }: { programId: string }) {
     if (!email) return;
     const { error } = await supabase.from("team_members").insert({ program_id: programId, invited_email: email.toLowerCase(), role: "member" });
     if (error) return toast.error(error.message);
+    // NOTE: email delivery is intentionally disabled in this build.
+    // See src/routes/api/public/mailersend.ts — uncomment to send invites.
+    // await sendInviteEmail(email, programId);
     setEmail(""); await load();
     toast.success("Invitation added. They'll get access when they sign up with this email.");
   }
@@ -312,6 +386,9 @@ function TeamTab({ programId }: { programId: string }) {
         <Input type="email" placeholder="caseworker@housing.gov" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Invite email" />
         <Button onClick={invite}>Invite</Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Email sending is switched off in this build, so nothing is mailed out. Share the sign-up link yourself; access links up automatically when they create an account with this address.
+      </p>
       <ul className="divide-y divide-border rounded-lg border border-border bg-card">
         {members.map((m) => (
           <li key={m.id} className="flex justify-between p-3 text-sm">
@@ -324,6 +401,8 @@ function TeamTab({ programId }: { programId: string }) {
     </div>
   );
 }
+
+/* --------------------------------------------------------- analytics tab */
 
 function AnalyticsTab({ programId }: { programId: string }) {
   const [stats, setStats] = useState<{ total: number; failReasons: { rule: string; count: number }[]; avgHours: number | null }>({ total: 0, failReasons: [], avgHours: null });
@@ -351,15 +430,15 @@ function AnalyticsTab({ programId }: { programId: string }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <p className="text-xs text-muted-foreground">Applications</p>
         <p className="text-3xl font-semibold">{stats.total}</p>
       </div>
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <p className="text-xs text-muted-foreground">Avg time to submit</p>
         <p className="text-3xl font-semibold">{stats.avgHours == null ? "—" : `${stats.avgHours.toFixed(1)}h`}</p>
       </div>
-      <div className="sm:col-span-2 rounded-lg border border-border bg-card p-4">
+      <div className="sm:col-span-2 rounded-lg border border-border bg-card p-4 shadow-sm">
         <p className="text-sm font-semibold">Most common fix-reasons</p>
         {stats.failReasons.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No data yet.</p> : (
           <ul className="mt-2 space-y-1 text-sm">
@@ -371,31 +450,58 @@ function AnalyticsTab({ programId }: { programId: string }) {
   );
 }
 
+/* ---------------------------------------------------------- settings tab */
+
 function SettingsTab({ prog, onSaved }: { prog: ProgramFull; onSaved: () => void }) {
   const [days, setDays] = useState<number>(prog.retention_days ?? 90);
+  const [preMarked, setPreMarked] = useState<string[]>(prog.default_pre_marked ?? []);
   const [busy, setBusy] = useState(false);
+
   async function save() {
     setBusy(true);
     const { error } = await supabase
       .from("programs")
-      .update({ retention_days: days } as never)
+      .update({ retention_days: days, default_pre_marked: preMarked } as never)
       .eq("id", prog.id);
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success("Retention window updated.");
+    toast.success("Settings updated.");
     onSaved();
   }
+
   return (
-    <div className="max-w-xl space-y-3 rounded-lg border border-border bg-card p-4">
-      <h2 className="font-semibold">Data retention</h2>
-      <p className="text-sm text-muted-foreground">
-        Uploaded document images are deleted automatically after this many days of inactivity, or once a decision is made — whichever comes first.
-      </p>
-      <div>
-        <Label htmlFor="ret">Days of inactivity before auto-purge</Label>
-        <Input id="ret" type="number" min={7} max={365} value={days} onChange={(e) => setDays(Math.max(7, Math.min(365, Number(e.target.value) || 90)))} />
+    <div className="max-w-2xl space-y-4">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+        <h2 className="font-semibold">Data retention</h2>
+        <p className="text-sm text-muted-foreground">
+          Uploaded document images are deleted automatically after this many days of inactivity, or once a decision is made, whichever comes first.
+        </p>
+        <div>
+          <Label htmlFor="ret">Days of inactivity before auto-purge</Label>
+          <Input id="ret" type="number" min={7} max={365} value={days} onChange={(e) => setDays(Math.max(7, Math.min(365, Number(e.target.value) || 90)))} />
+        </div>
       </div>
-      <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
+        <h2 className="font-semibold">Caseworker pre-checks</h2>
+        <p className="text-sm text-muted-foreground">
+          Tick anything your office already holds on file. New applications start with these hidden from the renter's checklist,
+          so nobody is asked to re-upload something a caseworker already collected. You can still override this per application.
+        </p>
+        <ul className="space-y-2">
+          {(prog.requirements ?? []).map((r) => (
+            <li key={r.id} className="flex items-center gap-2 text-sm">
+              <input id={`pm-${r.id}`} type="checkbox" className="h-4 w-4 min-h-0"
+                checked={preMarked.includes(r.id)}
+                onChange={(e) => setPreMarked(e.target.checked ? [...preMarked, r.id] : preMarked.filter((x) => x !== r.id))} />
+              <label htmlFor={`pm-${r.id}`}>{r.name}</label>
+            </li>
+          ))}
+          {(prog.requirements ?? []).length === 0 && <li className="text-sm text-muted-foreground">Add requirements first.</li>}
+        </ul>
+      </div>
+
+      <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save settings"}</Button>
     </div>
   );
 }

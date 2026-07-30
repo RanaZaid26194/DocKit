@@ -22,13 +22,13 @@ function AuthedLayout() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/dashboard" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <img src={logo} alt="" width={28} height={28} />
             <span className="font-semibold">DocKit</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm">
-            <Link to="/dashboard" className="hover:underline">Programs</Link>
-            <button onClick={signOut} className="rounded-md border border-input px-3 py-2">Sign out</button>
+            <Link to="/dashboard" className="rounded-md px-2 py-1 transition-colors hover:bg-muted hover:text-foreground hover:underline">Programs</Link>
+            <button onClick={signOut} className="rounded-md border border-input bg-background px-3 py-2 shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">Sign out</button>
           </nav>
         </div>
       </header>

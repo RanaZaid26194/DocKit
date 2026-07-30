@@ -1,3 +1,26 @@
+// ⚠️ EMAIL SENDING IS DISABLED IN THIS BUILD.
+//
+// Per the round-5 brief, no mail provider needs to be configured to run
+// DocKit. The full MailerSend implementation is preserved verbatim below,
+// commented out. To re-enable: delete the stub route, uncomment the block,
+// and set MAILERSEND_API_TOKEN / MAIL_FROM_ADDRESS / MAIL_FROM_NAME.
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/api/public/mailersend")({
+  server: {
+    handlers: {
+      POST: async () =>
+        new Response(
+          JSON.stringify({ ok: false, disabled: true, reason: "Email sending is disabled in this build." }),
+          { status: 501, headers: { "Content-Type": "application/json" } },
+        ),
+    },
+  },
+});
+
+/* ---------------------------------------------------------------------------
+ORIGINAL IMPLEMENTATION (disabled)
+
 // MailerSend transactional send endpoint. Called from the client after a
 // manager decides an application or invites a teammate. The `/api/public/*`
 // prefix bypasses site auth; we still verify the caller has a valid Supabase
@@ -72,3 +95,5 @@ export const Route = createFileRoute("/api/public/mailersend")({
     },
   },
 });
+
+--------------------------------------------------------------------------- */
