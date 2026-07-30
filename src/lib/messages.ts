@@ -53,7 +53,7 @@ export async function renterPostMessage(token: string, body: string, documentId?
   const { error } = await supabase.rpc("renter_post_message", {
     _token: token,
     _body: body,
-    _document_id: documentId ?? null,
+    _document_id: documentId ?? undefined,
   });
   if (error) throw error;
 }
