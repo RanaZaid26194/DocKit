@@ -415,10 +415,73 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
         </AlertDialog>
       </div>
 
+      {library.length > 0 && (
+        <p className="text-xs text-muted-foreground no-print">
+          {library.length} document(s) are saved on this device for reuse.{" "}
+          <button className="underline" onClick={async () => { await clearLibrary(); refreshLibrary(); toast.success("Saved documents cleared."); }}>
+            Clear them
+          </button>
+        </p>
+      )}
+
+      <MessagePanel token={token} />
+
       <p className="pt-6 text-xs text-muted-foreground">{t("footer.notLegal")}</p>
     </div>
   );
 }
+
+/** Threaded note log between the renter and the housing office. */
+function MessagePanel({ token }: { token: string }) {
+  const [msgs, setMsgs] = useState<AppMessage[]>([]);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setMsgs(await renterListMessages(token)); } catch { /* optional */ }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function send() {
+    const text = body.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      await renterPostMessage(token, text);
+      setBody("");
+      await load();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 no-print" aria-labelledby="msg-h">
+      <h2 id="msg-h" className="flex items-center gap-2 text-sm font-semibold">
+        <MessageSquare className="h-4 w-4" />Messages with the housing office
+      </h2>
+      <div className="mt-3 space-y-2" aria-live="polite">
+        {msgs.length === 0 && <p className="text-sm text-muted-foreground">No messages yet. Ask a question if something is unclear.</p>}
+        {msgs.map((m) => (
+          <div key={m.id} className={`rounded-md p-2 text-sm ${m.author_role === "renter" ? "bg-accent" : "bg-muted"}`}>
+            <p className="text-xs text-muted-foreground">
+              {m.author_role === "renter" ? "You" : m.author_name || "Housing office"} · {new Date(m.created_at).toLocaleString()}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <label htmlFor="msg-in" className="sr-only">Message</label>
+        <Input id="msg-in" value={body} maxLength={2000} placeholder="Type a question (optional)"
+          onChange={(e) => setBody(e.target.value)} />
+        <Button onClick={send} disabled={busy || !body.trim()} aria-label="Send message">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 
 function StatusBadge({ status, t }: { status: string; t: (k: never) => string }) {
   if (status === "pass") return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium status-pass"><CheckCircle2 className="h-3 w-3" />{t("checklist.pass" as never)}</span>;
