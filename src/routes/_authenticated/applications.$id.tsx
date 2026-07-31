@@ -2,20 +2,25 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { signedUrl } from "@/lib/renter-api";
-import { Download, CheckCircle2, XCircle, AlertTriangle, Lock, RotateCcw } from "lucide-react";
+import { runRules, type Requirement } from "@/lib/rules/engine";
+import { listMessages, postManagerMessage, type AppMessage } from "@/lib/messages";
+import { Download, CheckCircle2, XCircle, AlertTriangle, Lock, RotateCcw, MessageSquare, Send, History, Microscope } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 
 interface Doc {
   id: string; requirement_id: string; doc_type: string; applicant_index: number;
-  storage_path: string | null; status: string; issues: { message: string; severity: string }[]; exif_flag: boolean; exif_reason: string | null;
+  storage_path: string | null; ocr_text: string | null; status: string; issues: { message: string; severity: string }[]; exif_flag: boolean; exif_reason: string | null;
 }
 interface App {
   id: string; program_id: string; status: string; applicant: { name?: string }; co_applicants: { name?: string }[];
   submitted_at: string | null; decided_at: string | null; packet_path: string | null; manager_note: string | null;
 }
-interface Program { id: string; name: string; requirements: { id: string; name: string; perPerson: boolean }[] }
+interface Snapshot { id: string; state: string; packet_sha256: string; taken_at: string }
+interface Program { id: string; name: string; requirements: Requirement[] }
+
 
 const STATUS_LABELS: Record<string, string> = {
   in_progress: "In progress",
