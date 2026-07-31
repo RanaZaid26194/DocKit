@@ -323,6 +323,18 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
               {d && <StatusBadge status={d.status} t={t} />}
             </div>
 
+            {(req.sampleImage || req.sampleHint) && (
+              <div className="mt-3 flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3 no-print">
+                {req.sampleImage && (
+                  <img src={req.sampleImage} alt={`Example of ${req.name}`} className="h-20 w-20 rounded-md border border-border object-cover" />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">What a good photo looks like. </span>
+                  {req.sampleHint ?? "Match the framing in this example."}
+                </p>
+              </div>
+            )}
+
             {d?.status === "flagged" && (
               <div className="mt-3 rounded-md bg-warning/15 p-3 text-sm">
                 <p>{t("checklist.tamperCopy")}</p>
@@ -336,23 +348,51 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
             ) : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2 no-print">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:bg-muted">
                 <Camera className="h-4 w-4" />
                 {d ? "Retake photo" : "Take photo"}
                 <input type="file" accept="image/*" capture="environment" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
               </label>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:bg-muted">
                 <Upload className="h-4 w-4" />
                 Upload file
                 <input type="file" accept="image/*,application/pdf" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
               </label>
-              {busyKey === key && <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("checklist.checking")}</span>}
+              {library.length > 0 && (
+                <Button type="button" variant="outline" size="sm"
+                  onClick={() => setPickerFor(pickerFor === key ? null : key)}>
+                  <FolderOpen className="mr-1 h-4 w-4" />Reuse saved
+                </Button>
+              )}
+              {busyKey === key && (
+                <span className="inline-flex items-center gap-1 text-sm text-muted-foreground" aria-live="polite">
+                  <Loader2 className="h-4 w-4 animate-spin" />{busyNote || t("checklist.checking")}
+                </span>
+              )}
             </div>
+
+            {pickerFor === key && (
+              <div className="mt-3 rounded-md border border-border bg-muted/30 p-3 no-print">
+                <p className="text-xs text-muted-foreground">
+                  Saved on this device only. Reusing one re-runs every check for this program.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {rankForRequirement(library, req.name).map((entry) => (
+                    <button key={entry.id} onClick={() => reuseEntry(req, applicantIndex, entry)}
+                      className="w-24 rounded-md border border-border bg-card p-1 text-left transition-colors hover:bg-muted">
+                      <img src={entry.thumb} alt="" className="h-16 w-full rounded object-cover" />
+                      <span className="mt-1 block truncate text-[11px]">{entry.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
+
 
       <div className="flex flex-wrap gap-2 pt-4 no-print">
         <Button onClick={async () => { setFinishBusy(true); try { await onFinish(); } finally { setFinishBusy(false); } }}
