@@ -6,7 +6,11 @@ import {
   type ApplicationRow, type ProgramRow, type DocumentRow, type Applicant,
 } from "@/lib/renter-api";
 import { runRules, type Requirement } from "@/lib/rules/engine";
-import { runOcr, checkExifTamper } from "@/lib/ocr";
+import { runOcr, runOcrOnPdf, checkExifTamper, toThumbDataUrl } from "@/lib/ocr";
+import {
+  listLibrary, saveToLibrary, rankForRequirement, clearLibrary, type LibraryEntry,
+} from "@/lib/doc-library";
+import { renterListMessages, renterPostMessage, type AppMessage } from "@/lib/messages";
 import { buildPacket } from "@/lib/packet";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,8 +23,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock } from "lucide-react";
+import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock, FolderOpen, MessageSquare, Send } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
@@ -179,47 +184,48 @@ interface ChecklistProps {
   printable: boolean; togglePrintable: () => void;
 }
 
-async function pdfFirstPageToJpeg(file: File): Promise<File> {
-  // Rasterize the first page of a PDF into a JPEG so Tesseract can read it.
-  const pdfjs = await import("pdfjs-dist");
-  // Vite worker resolution — bundle-friendly.
-  const workerUrl = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
-  (pdfjs as unknown as { GlobalWorkerOptions: { workerSrc: string } }).GlobalWorkerOptions.workerSrc = workerUrl;
-  const buf = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data: buf }).promise;
-  const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 2 });
-  const canvas = document.createElement("canvas");
-  canvas.width = viewport.width; canvas.height = viewport.height;
-  const ctx = canvas.getContext("2d")!;
-  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-  const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.9));
-  return new File([blob], file.name.replace(/\.pdf$/i, ".jpg"), { type: "image/jpeg" });
-}
-
 function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onFinish, printable, togglePrintable }: ChecklistProps) {
   const t = useT();
   const people = [app.applicant, ...(app.co_applicants ?? [])];
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [busyNote, setBusyNote] = useState<string>("");
   const [finishBusy, setFinishBusy] = useState(false);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
 
-  async function handleFile(req: Requirement, applicantIndex: number, incoming: File) {
+  const refreshLibrary = useCallback(() => { listLibrary().then(setLibrary); }, []);
+  useEffect(() => { refreshLibrary(); }, [refreshLibrary]);
+
+  async function handleFile(req: Requirement, applicantIndex: number, incoming: File, opts?: { skipLibrary?: boolean }) {
     let file = incoming;
+    let pdfText: string | null = null;
+    const key = `${req.id}-${applicantIndex}`;
+    if (file.size > MAX_BYTES) return toast.error("File is too large (max 10 MB).");
+
     if (file.type === PDF_MIME) {
-      if (file.size > MAX_BYTES) return toast.error("File is too large (max 10 MB).");
-      try { file = await pdfFirstPageToJpeg(file); }
-      catch { return toast.error("We couldn't open that PDF. Try a photo instead."); }
+      setBusyKey(key);
+      setBusyNote("Opening PDF");
+      try {
+        // Multi-page OCR: every page (up to 8) is read, so a date or a name on
+        // page 3 still satisfies the rules. Page 1 is what we store as the image.
+        const { text, pages } = await runOcrOnPdf(file, (p, total) => setBusyNote(`Reading page ${p} of ${total}`));
+        if (!pages.length) throw new Error("empty pdf");
+        pdfText = text;
+        file = pages[0];
+      } catch {
+        setBusyKey(null);
+        return toast.error("We couldn't open that PDF. Try a photo instead.");
+      }
     } else if (!ALLOWED_IMG.includes(file.type)) {
       return toast.error("Please upload a JPG, PNG, WEBP, or PDF.");
     }
-    if (file.size > MAX_BYTES) return toast.error("File is too large (max 10 MB).");
-    const key = `${req.id}-${applicantIndex}`;
+
     setBusyKey(key);
     try {
       const ext = file.type.split("/")[1] || "jpg";
       const [path, ocrText, exif] = await Promise.all([
         uploadDoc(token, app.id, file, ext),
-        runOcr(file),
+        pdfText !== null ? Promise.resolve(pdfText) : runOcr(file, { onProgress: (_f, note) => note && setBusyNote(note) }),
         checkExifTamper(file),
       ]);
       const names = [people[applicantIndex]?.name].filter(Boolean) as string[];
@@ -230,13 +236,31 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
         storagePath: path, ocrText, status,
         issues: result.issues, exifFlag: exif.flagged, exifReason: exif.reason ?? null,
       });
+      // Local-only reuse library. Never leaves this browser.
+      if (!opts?.skipLibrary) {
+        try {
+          const thumb = await toThumbDataUrl(file, 320, 0.6);
+          await saveToLibrary({ label: req.name, requirementName: req.name, mime: file.type, thumb, blob: file });
+          refreshLibrary();
+        } catch { /* library is a convenience */ }
+      }
       await onDocProcessed();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusyKey(null);
+      setBusyNote("");
     }
   }
+
+  async function reuseEntry(req: Requirement, applicantIndex: number, entry: LibraryEntry) {
+    setPickerFor(null);
+    const f = new File([entry.blob], `${entry.label}.jpg`, { type: entry.mime || "image/jpeg" });
+    // Re-checked from scratch against this program's rules — nothing is trusted
+    // just because it passed somewhere else.
+    await handleFile(req, applicantIndex, f, { skipLibrary: true });
+  }
+
 
   async function acknowledge(doc: DocumentRow) {
     await saveDocument({
@@ -299,6 +323,18 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
               {d && <StatusBadge status={d.status} t={t} />}
             </div>
 
+            {(req.sampleImage || req.sampleHint) && (
+              <div className="mt-3 flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3 no-print">
+                {req.sampleImage && (
+                  <img src={req.sampleImage} alt={`Example of ${req.name}`} className="h-20 w-20 rounded-md border border-border object-cover" />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">What a good photo looks like. </span>
+                  {req.sampleHint ?? "Match the framing in this example."}
+                </p>
+              </div>
+            )}
+
             {d?.status === "flagged" && (
               <div className="mt-3 rounded-md bg-warning/15 p-3 text-sm">
                 <p>{t("checklist.tamperCopy")}</p>
@@ -312,23 +348,51 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
             ) : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2 no-print">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:bg-muted">
                 <Camera className="h-4 w-4" />
                 {d ? "Retake photo" : "Take photo"}
                 <input type="file" accept="image/*" capture="environment" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
               </label>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm transition-colors hover:bg-muted">
                 <Upload className="h-4 w-4" />
                 Upload file
                 <input type="file" accept="image/*,application/pdf" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(req, applicantIndex, f); e.currentTarget.value = ""; }} />
               </label>
-              {busyKey === key && <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("checklist.checking")}</span>}
+              {library.length > 0 && (
+                <Button type="button" variant="outline" size="sm"
+                  onClick={() => setPickerFor(pickerFor === key ? null : key)}>
+                  <FolderOpen className="mr-1 h-4 w-4" />Reuse saved
+                </Button>
+              )}
+              {busyKey === key && (
+                <span className="inline-flex items-center gap-1 text-sm text-muted-foreground" aria-live="polite">
+                  <Loader2 className="h-4 w-4 animate-spin" />{busyNote || t("checklist.checking")}
+                </span>
+              )}
             </div>
+
+            {pickerFor === key && (
+              <div className="mt-3 rounded-md border border-border bg-muted/30 p-3 no-print">
+                <p className="text-xs text-muted-foreground">
+                  Saved on this device only. Reusing one re-runs every check for this program.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {rankForRequirement(library, req.name).map((entry) => (
+                    <button key={entry.id} onClick={() => reuseEntry(req, applicantIndex, entry)}
+                      className="w-24 rounded-md border border-border bg-card p-1 text-left transition-colors hover:bg-muted">
+                      <img src={entry.thumb} alt="" className="h-16 w-full rounded object-cover" />
+                      <span className="mt-1 block truncate text-[11px]">{entry.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
+
 
       <div className="flex flex-wrap gap-2 pt-4 no-print">
         <Button onClick={async () => { setFinishBusy(true); try { await onFinish(); } finally { setFinishBusy(false); } }}
@@ -351,10 +415,73 @@ function Checklist({ program, app, docs, token, onDocProcessed, onStartOver, onF
         </AlertDialog>
       </div>
 
+      {library.length > 0 && (
+        <p className="text-xs text-muted-foreground no-print">
+          {library.length} document(s) are saved on this device for reuse.{" "}
+          <button className="underline" onClick={async () => { await clearLibrary(); refreshLibrary(); toast.success("Saved documents cleared."); }}>
+            Clear them
+          </button>
+        </p>
+      )}
+
+      <MessagePanel token={token} />
+
       <p className="pt-6 text-xs text-muted-foreground">{t("footer.notLegal")}</p>
     </div>
   );
 }
+
+/** Threaded note log between the renter and the housing office. */
+function MessagePanel({ token }: { token: string }) {
+  const [msgs, setMsgs] = useState<AppMessage[]>([]);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setMsgs(await renterListMessages(token)); } catch { /* optional */ }
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  async function send() {
+    const text = body.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      await renterPostMessage(token, text);
+      setBody("");
+      await load();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 no-print" aria-labelledby="msg-h">
+      <h2 id="msg-h" className="flex items-center gap-2 text-sm font-semibold">
+        <MessageSquare className="h-4 w-4" />Messages with the housing office
+      </h2>
+      <div className="mt-3 space-y-2" aria-live="polite">
+        {msgs.length === 0 && <p className="text-sm text-muted-foreground">No messages yet. Ask a question if something is unclear.</p>}
+        {msgs.map((m) => (
+          <div key={m.id} className={`rounded-md p-2 text-sm ${m.author_role === "renter" ? "bg-accent" : "bg-muted"}`}>
+            <p className="text-xs text-muted-foreground">
+              {m.author_role === "renter" ? "You" : m.author_name || "Housing office"} · {new Date(m.created_at).toLocaleString()}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <label htmlFor="msg-in" className="sr-only">Message</label>
+        <Input id="msg-in" value={body} maxLength={2000} placeholder="Type a question (optional)"
+          onChange={(e) => setBody(e.target.value)} />
+        <Button onClick={send} disabled={busy || !body.trim()} aria-label="Send message">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 
 function StatusBadge({ status, t }: { status: string; t: (k: never) => string }) {
   if (status === "pass") return <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium status-pass"><CheckCircle2 className="h-3 w-3" />{t("checklist.pass" as never)}</span>;
