@@ -6,7 +6,11 @@ import {
   type ApplicationRow, type ProgramRow, type DocumentRow, type Applicant,
 } from "@/lib/renter-api";
 import { runRules, type Requirement } from "@/lib/rules/engine";
-import { runOcr, checkExifTamper } from "@/lib/ocr";
+import { runOcr, runOcrOnPdf, checkExifTamper, toThumbDataUrl } from "@/lib/ocr";
+import {
+  listLibrary, saveToLibrary, rankForRequirement, clearLibrary, type LibraryEntry,
+} from "@/lib/doc-library";
+import { renterListMessages, renterPostMessage, type AppMessage } from "@/lib/messages";
 import { buildPacket } from "@/lib/packet";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,8 +23,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock } from "lucide-react";
+import { Camera, Upload, Printer, Loader2, CheckCircle2, AlertTriangle, XCircle, Lock, FolderOpen, MessageSquare, Send } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMG = ["image/jpeg", "image/png", "image/webp"];
