@@ -99,3 +99,19 @@ new operator needs to complete before production.
 - Real MailerSend send on the client side (route is live, but the
   Team invite / Decision actions don't call it yet — plumb them in
   after you have production MailerSend keys).
+
+## Round 6 update
+
+Everything previously listed as "UI not mounted" is now mounted:
+
+- Renter checklist: multi-page PDF OCR with per-page progress, the local
+  document-library picker ("Reuse saved" + "Clear them"), sample image and
+  photo tip per requirement, and a message thread with the housing office.
+- Manager review: "Why this result" explainability panel (per-rule trace plus
+  the recognized text), the snapshot audit trail, and the manager side of the
+  message thread.
+
+Remaining open items are tracked in `suggested-features.md`: native
+translations for the six non-EN/ES languages (needs human translators),
+WCAG AAA polish, low-bandwidth deferred OCR, and SMS nudges. Email remains
+intentionally disabled (`/api/public/mailersend` returns 501).
