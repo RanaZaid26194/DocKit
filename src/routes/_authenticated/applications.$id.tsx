@@ -267,13 +267,128 @@ function ReviewPage() {
               ) : app.decided_at ? (
                 <p className="text-sm text-muted-foreground">Image deleted (application decided on {new Date(app.decided_at).toLocaleDateString()}).</p>
               ) : null}
+
+              <ExplainPanel req={currentSlot.req} doc={currentDoc} names={people.map((p) => p?.name ?? "").filter(Boolean)} />
             </div>
           )}
+
+          <div className="mt-6 space-y-4 border-t border-border pt-4">
+            <SnapshotTrail snaps={snaps} />
+            <ManagerMessages applicationId={id} disabled={isClosed} />
+          </div>
         </section>
       </div>
     </div>
   );
 }
+
+/**
+ * Explainability panel (suggested feature #12): re-runs the deterministic rule
+ * set against the stored OCR text so a manager can see exactly what each check
+ * looked for and what it found. Nothing here decides eligibility.
+ */
+function ExplainPanel({ req, doc, names }: { req: Requirement; doc: Doc; names: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (!req.rules?.length) return null;
+  const result = runRules(req.rules, doc.ocr_text ?? "", { names });
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3">
+      <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 text-sm font-medium transition-colors hover:underline"
+        aria-expanded={open}>
+        <Microscope className="h-4 w-4" />Why this result
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2">
+          {result.trace.map((tr, i) => (
+            <div key={i} className="rounded-md bg-card p-2 text-xs">
+              <p className="font-medium">
+                <span className={tr.passed ? "text-success-foreground" : "text-destructive"}>{tr.passed ? "PASS" : "FAIL"}</span>{" "}
+                {tr.label}
+              </p>
+              <p className="mt-1 text-muted-foreground">Looked for: {tr.looksFor}</p>
+              <p className="text-muted-foreground">Found: {tr.found}</p>
+            </div>
+          ))}
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Recognized text</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-card p-2">{doc.ocr_text || "(no text captured)"}</pre>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Snapshot audit trail (suggested feature #5): hashes captured at state changes. */
+function SnapshotTrail({ snaps }: { snaps: Snapshot[] }) {
+  if (!snaps.length) return null;
+  return (
+    <div>
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4" />Audit trail</h2>
+      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+        {snaps.map((s) => (
+          <li key={s.id} className="rounded-md bg-muted/40 p-2">
+            <span className="font-medium text-foreground">{s.state}</span> · {new Date(s.taken_at).toLocaleString()}
+            <br />
+            <code className="break-all">sha256:{s.packet_sha256}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Manager side of the in-app message thread (suggested feature #3). */
+function ManagerMessages({ applicationId, disabled }: { applicationId: string; disabled: boolean }) {
+  const [msgs, setMsgs] = useState<AppMessage[]>([]);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setMsgs(await listMessages(applicationId)); } catch { /* optional */ }
+  }, [applicationId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function send() {
+    const text = body.trim();
+    if (!text) return;
+    setBusy(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      await postManagerMessage(applicationId, text, null, data.user?.email ?? "Housing office");
+      setBody("");
+      await load();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div>
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="h-4 w-4" />Messages with the renter</h2>
+      <div className="mt-2 space-y-2" aria-live="polite">
+        {msgs.length === 0 && <p className="text-sm text-muted-foreground">No messages yet.</p>}
+        {msgs.map((m) => (
+          <div key={m.id} className={`rounded-md p-2 text-sm ${m.author_role === "manager" ? "bg-accent" : "bg-muted"}`}>
+            <p className="text-xs text-muted-foreground">
+              {m.author_role === "manager" ? m.author_name || "You" : m.author_name || "Renter"} · {new Date(m.created_at).toLocaleString()}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <label htmlFor="mgr-msg" className="sr-only">Message to renter</label>
+        <Input id="mgr-msg" value={body} maxLength={2000} disabled={disabled}
+          placeholder={disabled ? "Application is closed" : "Write a message"}
+          onChange={(e) => setBody(e.target.value)} />
+        <Button onClick={send} disabled={busy || disabled || !body.trim()} aria-label="Send message">
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 
 function StatusPill({ s }: { s: string }) {
   const cls = s === "pass" ? "status-pass" : s === "flagged" ? "status-flag" : "status-fail";
