@@ -45,6 +45,7 @@ function ReviewPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
+  const [snaps, setSnaps] = useState<Snapshot[]>([]);
 
   const load = useCallback(async () => {
     const { data: a } = await supabase.from("applications").select("*").eq("id", id).single();
@@ -55,6 +56,8 @@ function ReviewPage() {
     setProg(p as unknown as Program);
     const { data: d } = await supabase.from("documents").select("*").eq("application_id", id).order("created_at");
     setDocs(((d ?? []) as unknown) as Doc[]);
+    const { data: s } = await supabase.from("application_snapshots").select("*").eq("application_id", id).order("taken_at", { ascending: false });
+    setSnaps(((s ?? []) as unknown) as Snapshot[]);
     const newUrls: Record<string, string> = {};
     for (const doc of d ?? []) {
       if (doc.storage_path) {
@@ -65,6 +68,7 @@ function ReviewPage() {
     setUrls(newUrls);
     if (!selected && d && d.length) setSelected((d[0] as { id: string }).id);
   }, [id, selected]);
+
   useEffect(() => { load(); }, [load]);
 
   // Realtime: refresh when documents change (renter re-uploads, decision made, etc.)
